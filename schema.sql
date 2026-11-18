@@ -1,5 +1,6 @@
 -- =====================================================================
--- MONSTER WORLD · 데이터베이스 v2.0  (Supabase / PostgreSQL) — 여러 학원용
+-- MONSTER WORLD · 데이터베이스 v2.1  (Supabase / PostgreSQL) — 여러 학원용
+-- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
 -- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
 --
@@ -199,8 +200,9 @@ begin
     "xp_per_level": 300, "max_level": 50, "evolve_levels": [15,35], "weekly_xp_goal": 300, "point_rate": 0,
     "point_name": "포인트",
     "stages": ["Reader","Builder","Writer","Speaker","Author"],
-    "activity_xp": {"reading":20,"vocab":30,"syntax":30,"grammar":30,"writing":50,"homework":20,"challenge":100},
-    "activity_labels": {"reading":"원서 읽기 완료","vocab":"단어 테스트 통과","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","homework":"숙제 성실 완료","challenge":"특별 영어 챌린지"},
+    "activity_xp": {"reading":20,"vocab":30,"syntax":30,"grammar":30,"writing":50,"bookwriting":30,"bookquiz":30,"homework":20,"challenge":100},
+    "activity_labels": {"reading":"원서 읽기 완료","vocab":"단어 테스트 통과","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","challenge":"특별 영어 챌린지"},
+    "self_report_acts": ["vocab","bookwriting","bookquiz","homework"],
     "reading_milestones": [{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
     if not exists (select 1 from mw_settings where academy_id is null and key = d.key) then
@@ -208,6 +210,12 @@ begin
     end if;
   end loop;
 end $$;
+
+-- v2.1 보충: 이미 있는 설정에 새 활동(북라이팅·북퀴즈)만 추가합니다. 학원이 바꾼 값은 그대로 둡니다.
+update mw_settings set value = '{"bookwriting":30,"bookquiz":30}'::jsonb || value
+ where key = 'activity_xp' and not (value ? 'bookwriting' and value ? 'bookquiz');
+update mw_settings set value = '{"bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과"}'::jsonb || value
+ where key = 'activity_labels' and academy_id is null and not (value ? 'bookwriting' and value ? 'bookquiz');
 
 insert into mw_species(id, name, animal, concept, rarity, season, sort, art, forms) values
  ('flamy','FLAMY','불꽃 여우','용기와 도전','starter',null,1,
@@ -489,6 +497,38 @@ begin
   if not found then raise exception '요청할 수 없는 미션입니다.'; end if;
 end $$;
 
+-- 학생이 배정 없이 스스로 '다 했어요' 요청. 활동마다 하루(한국 시간) 1번, XP는 학원 설정값.
+-- 같은 날 배정된(assigned) 또는 반려된(rejected) 미션이 있으면 새로 만들지 않고 그 미션을 요청 상태로 바꿉니다.
+-- 체험 모드 Demo.F.self_report 와 같은 규칙입니다.
+create or replace function mw_self_report(p_activity text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid := mw_my_academy(); v_day date := (now() at time zone 'Asia/Seoul')::date;
+        v_xp int; v_id uuid; v_st text;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  if not (coalesce(mw_setting(v_ac, 'self_report_acts'), '[]'::jsonb) ? coalesce(p_activity, '')) then
+    raise exception '스스로 요청할 수 없는 활동입니다.'; end if;
+  perform pg_advisory_xact_lock(hashtext('mw_self_report:' || auth.uid()::text || ':' || p_activity));
+  select id, status into v_id, v_st from mw_missions
+   where student_id = auth.uid() and activity = p_activity and due_date = v_day
+     and status in ('assigned','requested','approved','rejected')
+   order by case status when 'assigned' then 0 when 'rejected' then 1 else 2 end, created_at desc
+   limit 1;
+  if v_st in ('assigned','rejected') then
+    update mw_missions set status = 'requested', requested_at = now() where id = v_id;
+    return v_id;
+  elsif v_st is not null then
+    raise exception '오늘 이미 요청한 활동입니다.';
+  end if;
+  v_xp := (mw_setting(v_ac, 'activity_xp')->>p_activity)::int;
+  if v_xp is null or v_xp < 0 or v_xp > 500 then
+    raise exception '이 활동의 XP 기준이 설정되지 않았습니다. 선생님께 알려 주세요.'; end if;
+  insert into mw_missions(student_id, activity, title, xp, due_date, status, requested_at, created_by)
+  values (auth.uid(), p_activity, '', v_xp, v_day, 'requested', now(), auth.uid())
+  returning id into v_id;
+  return v_id;
+end $$;
+
 create or replace function mw_title_key(p_title text) returns text
 language sql immutable as $$
   select lower(regexp_replace(coalesce(p_title, ''), '[^[:alnum:]]', '', 'g'));
@@ -712,7 +752,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts') then
     raise exception '알 수 없는 설정입니다.'; end if;
   v_old := mw_setting(v_ac, p_key);
   update mw_settings set value = p_value, updated_by = auth.uid(), updated_at = now() where academy_id = v_ac and key = p_key;
