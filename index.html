@@ -254,6 +254,7 @@ const weekStart=()=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate(
 const fmtD=s=>{const d=new Date(s);return (d.getMonth()+1)+'.'+d.getDate()};
 const ACT_BASE={attend:['At','출석'],late:['Lt','지각'],good:['Gd','태도 Good'],bad:['Bd','태도 Bad'],vocab:['Vo','단어 테스트 통과'],textbook:['Tb','교재 1권 완료'],bookwriting:['Bw','북라이팅 완료'],bookquiz:['Bq','북퀴즈 통과'],homework:['Hw','숙제 성실 완료'],praise:['Sp','Special Praise'],ar:['AR','AR 북레벨 +1'],nelt:['NE','NELT 레벨 +1'],syntax:['Sx','Syntax Builder 완료'],grammar:['Gr','Grammar 완료'],writing:['Wr','Writing Builder 완료'],challenge:['Ch','특별 영어 챌린지'],reading:['Rd','원서 읽기 완료']};
 let ACT=Object.fromEntries(Object.entries(ACT_BASE).map(([k,v])=>[k,[...v]]));
+const wkTarget=r=>r.n>0||Number(r.bonus)>0,wkAmt=r=>{const rate=Number(W.set.point_rate)||0;return(rate?Math.round(r.xp*rate):Number(r.xp))+(Number(r.bonus)||0)},evoBonus=to=>Number((W.set.evolve_bonus||[500,1000])[to-2])||0;
 const actList=set=>((set&&Array.isArray(set.activity_list))?set.activity_list:DEF_SET.activity_list).filter(k=>k!=='reading');
 function buildAct(set){const lb=(set&&set.activity_labels)||{},keys=new Set([...Object.keys(ACT_BASE),...actList(set)]);ACT={};
   for(const k of keys){const l=lb[k]||ACT_DEF[k]||k;ACT[k]=[ACT_BASE[k]?ACT_BASE[k][0]:l.slice(0,2),l]}
@@ -370,7 +371,7 @@ const SPECIES_SEED=[
  ['frostie','FROSTIE','눈꽃 여우새','겨울 시즌 한정','seasonal','winter',{body:'#EAF2FA',belly:'#FFFFFF',accent:'#9CC3E8',dark:'#6C93BD',ears:'cat',tail:'fox',mark:'snow'}]
 ].map((r,i)=>({id:r[0],name:r[1],animal:r[2],concept:r[3],rarity:r[4],season:r[5],enabled:true,sort:i,art:r[6],
   forms:[1,2,3].map(s=>({stage:s,stage_name:STN[s],form_name:STN[s]+' '+r[1][0]+r[1].slice(1).toLowerCase()}))}));
-const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speaker','Author'],activity_labels:{},point_rate:0,xp_per_level:1000,max_level:50,evolve_levels:[15,35],weekly_xp_goal:800,
+const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speaker','Author'],activity_labels:{},point_rate:0,xp_per_level:1000,max_level:50,evolve_levels:[15,35],evolve_bonus:[500,1000],weekly_xp_goal:800,
   activity_xp:{"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
   activity_list:["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
   self_report_acts:["vocab","textbook","bookwriting","bookquiz","homework"],
@@ -488,7 +489,7 @@ const Demo={
       if(!m)throw new Error('진화시킬 수 있는 몬스터가 아닙니다.');if(m.stage>=3)throw new Error('이미 최종 단계입니다.');const to=m.stage+1,need=this.st.set.evolve_levels[m.stage-1];
       if(need==null||m.level<need)throw new Error(`레벨이 부족합니다. Lv.${need}부터 진화할 수 있습니다.`);if(!((to===2&&['evo','legend'].includes(a.use))||(to===3&&['legend','evo2'].includes(a.use))))throw new Error('사용할 수 없는 진화 방법입니다.');
       const b=this.stoneBalance(me.id);if((a.use==='evo'&&b.evo<1)||(a.use==='evo2'&&b.evo<2)||(a.use==='legend'&&b.legend<1))throw new Error('진화석이 부족합니다.');
-      this.st.rewards.push({student_id:me.id,reward_key:'evo:'+m.id+':'+to+':'+a.use});m.stage=to;this.badge(me.id,to===2?'evo_explorer':'evo_master');return to},
+      this.st.rewards.push({student_id:me.id,reward_key:'evo:'+m.id+':'+to+':'+a.use,granted_at:new Date().toISOString()});m.stage=to;this.badge(me.id,to===2?'evo_explorer':'evo_master');return to},
     stats(a){const me=this.me();if(!me||!me.active)throw new Error('볼 수 없는 학생입니다.');if(me.role!=='teacher'&&a.student!==me.id)throw new Error('볼 수 없는 학생입니다.');return this.statValues(a.student)},
     set_stage(a){this.T();const p=this.st.profiles.find(x=>x.id===a.student);if(p)p.epl_stage=a.stage},
     set_setting(a){this.T();const K=/^[a-z0-9_]{1,24}$/,v=a.value;
@@ -496,6 +497,7 @@ const Demo={
       if(a.key==='activity_stones'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!['evo','legend'].includes(x))))throw new Error('진화석 설정이 올바르지 않습니다.');
       if(a.key==='activity_stats'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!['read','write','vocab','grit'].includes(x))))throw new Error('활동별 스탯 설정이 올바르지 않습니다.');
       if(a.key==='stat_rewards'&&(!Array.isArray(v)||v.length>24||v.some(r=>!r||!['read','write','vocab','grit'].includes(r.stat)||!Number.isInteger(r.at)||r.at<1||r.at>1e6||!K.test(r.species||''))))throw new Error('스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.');
+      if(a.key==='evolve_bonus'&&(!Array.isArray(v)||v.length!==2||v.some(x=>!Number.isInteger(x)||x<0||x>10000)))throw new Error('진화 보너스는 0~10000 사이 정수여야 합니다.');
       if(a.key==='map_name_mode'&&!['nickname','masked','real','hidden'].includes(v))throw new Error('이름 표시 방식이 올바르지 않습니다.');
       if(a.key==='map_zones'&&(!Array.isArray(v)||v.length<1||v.length>8||v.some((z,i)=>!z||typeof z!=='object'||typeof z.from!=='number'||!(String(z.name||'').length>=1&&String(z.name).length<=24)||String(z.ko||'').length>24||(i===0&&z.from!==1)||(i>0&&z.from<=v[i-1].from))))throw new Error('마을 지도 설정이 올바르지 않습니다. 첫 마을은 Lv.1부터, 시작 레벨은 점점 커져야 합니다.');
       if(['activity_list','self_report_acts'].includes(a.key)&&(!Array.isArray(v)||v.length>40||v.some(k=>typeof k!=='string'||!K.test(k))))throw new Error('활동 목록 형식이 올바르지 않습니다.');
@@ -506,7 +508,9 @@ const Demo={
   },
   async weekly(start){this.T();const s0=new Date(start+'T00:00:00'),e0=new Date(s0);e0.setDate(e0.getDate()+7);const L=this.st.ledger,rev=new Set(L.filter(l=>l.kind==='revoke').map(l=>l.mission_id||l.book_id).filter(Boolean));
     return this.st.profiles.filter(p=>p.role==='student'&&p.active).map(p=>{const g=L.filter(l=>l.student_id===p.id&&l.kind==='grant'&&new Date(l.created_at)>=s0&&new Date(l.created_at)<e0&&!rev.has(l.mission_id||l.book_id)),acts={};for(const l of g)acts[l.reason]=(acts[l.reason]||0)+1;
-      const d=(this.st.settle||[]).find(x=>x.student_id===p.id&&x.week_start===start);return{student_id:p.id,n:g.length,xp:g.reduce((a,l)=>a+l.amount,0),acts,done_at:d?d.done_at:null}})},
+      const d=(this.st.settle||[]).find(x=>x.student_id===p.id&&x.week_start===start),eb=this.st.set.evolve_bonus||[500,1000];
+      const bonus=this.st.rewards.filter(r=>r.student_id===p.id&&r.reward_key.startsWith('evo:')&&r.granted_at&&new Date(r.granted_at)>=s0&&new Date(r.granted_at)<e0).reduce((a,r)=>a+(Number(eb[Number(r.reward_key.split(':')[2])-2])||0),0);
+      return{student_id:p.id,n:g.length,xp:g.reduce((a,l)=>a+l.amount,0),acts,done_at:d?d.done_at:null,bonus}})},
   async rpc(n,a){const f=this.F[n];if(!f)throw new Error('지원하지 않는 기능: '+n);const r=f.call(this,a||{});this.save();return r},
   async session(){return this.uid},
   async login(id){this.uid=id},
@@ -719,16 +723,15 @@ function viewTeacher(){
       <div class="note" style="margin-top:12px">실제 보상(${PN()})은 기존 방식대로 지급합니다. 이 화면은 몬스터 XP만 다룹니다.</div></section>
     </div></div>`;
   }else if(UI.ttab==='weekly'){
-    const ws=wkStart(),we=new Date(ws);we.setDate(we.getDate()+6);const rate=Number(W.set.point_rate)||0,pt=x=>Math.round(x*rate);
-    const rows=UI.weekly.filter(r=>stu.some(p=>p.id===r.student_id)).sort((a,b)=>stuName(a.student_id).localeCompare(stuName(b.student_id),'ko'));
-    const todo=rows.filter(r=>r.n>0&&!r.done_at),tx=rows.reduce((a,r)=>a+Number(r.xp),0);
+    const ws=wkStart(),we=new Date(ws);we.setDate(we.getDate()+6);const rows=UI.weekly.filter(r=>stu.some(p=>p.id===r.student_id)).sort((a,b)=>stuName(a.student_id).localeCompare(stuName(b.student_id),'ko'));
+    const rate=Number(W.set.point_rate)||0,todo=rows.filter(r=>wkTarget(r)&&!r.done_at),tx=rows.reduce((a,r)=>a+wkAmt(r),0);
     main=`<section class="card"><h3><span class="row"><button class="btn sm" data-act="wkMove" data-d="-1" aria-label="이전 주">‹</button><span class="num" style="font-size:18px">${fmtD(ws)} – ${fmtD(we)}</span><button class="btn sm" data-act="wkMove" data-d="1" aria-label="다음 주" ${UI.wk>=0?'disabled':''}>›</button>${UI.wk===0?'<span class="pill">이번 주</span>':''}</span><small>${PN()} 주간 입력표 · 승인 완료분만 집계</small></h3>
-     <div class="kpis" style="margin:0 0 12px"><div class="kpi"><b>${rows.filter(r=>r.n>0).length}</b><span>대상 학생</span></div><div class="kpi"><b>${todo.length}</b><span>${PN()} 미입력</span></div><div class="kpi"><b>${rate?pt(tx).toLocaleString():tx.toLocaleString()}</b><span>${rate?'지급 포인트 합계':'주간 XP 합계'}</span></div></div>
-     ${rows.length?`<div class="tw"><table><thead><tr><th>학생</th><th class="r">승인</th><th>활동 내역</th><th class="r">XP</th>${rate?`<th class="r">${PN()} 지급액</th>`:''}<th class="r">${PN()} 입력</th></tr></thead><tbody>
-      ${rows.map(r=>`<tr class="${r.done_at?'':r.n>0?'sel':''}"><td><b>${esc(stuName(r.student_id))}</b></td><td class="r num">${r.n}건</td><td>${Object.entries(r.acts||{}).map(([k,c])=>`<span class="pill gray">${esc((ACT[k]?.[1]||k).replace(' 완료','').replace(' 통과',''))} ${c}</span>`).join(' ')||'<span class="muted">—</span>'}</td><td class="r num">${r.xp}</td>${rate?`<td class="r num"><b>${pt(r.xp).toLocaleString()}</b></td>`:''}
-       <td class="r">${r.done_at?`<span class="pill ok">입력 완료 ${fmtD(r.done_at)}</span> <button class="btn sm g" data-act="settle" data-id="${r.student_id}" data-v="0">되돌리기</button>`:r.n>0?`<button class="btn sm p" data-act="settle" data-id="${r.student_id}" data-v="1">입력 완료</button>`:'<span class="muted">대상 아님</span>'}</td></tr>`).join('')}</tbody></table></div>
+     <div class="kpis" style="margin:0 0 12px"><div class="kpi"><b>${rows.filter(r=>r.n>0).length}</b><span>대상 학생</span></div><div class="kpi"><b>${todo.length}</b><span>${PN()} 미입력</span></div><div class="kpi"><b>${tx.toLocaleString()}</b><span>입력할 ${PN()} 합계</span></div></div>
+     ${rows.length?`<div class="tw"><table><thead><tr><th>학생</th><th class="r">승인</th><th>활동 내역</th><th class="r">XP</th><th class="r">진화 보너스</th><th class="r">입력할 ${PN()}</th><th class="r">${PN()} 입력</th></tr></thead><tbody>
+      ${rows.map(r=>`<tr class="${r.done_at?'':wkTarget(r)?'sel':''}"><td><b>${esc(stuName(r.student_id))}</b></td><td class="r num">${r.n}건</td><td>${Object.entries(r.acts||{}).map(([k,c])=>`<span class="pill gray">${esc((ACT[k]?.[1]||k).replace(' 완료','').replace(' 통과',''))} ${c}</span>`).join(' ')||'<span class="muted">—</span>'}</td><td class="r num">${r.xp}</td><td class="r num">${Number(r.bonus)?'+'+Number(r.bonus).toLocaleString():'<span class="muted">—</span>'}</td><td class="r num"><b>${wkAmt(r).toLocaleString()}</b></td>
+       <td class="r">${r.done_at?`<span class="pill ok">입력 완료 ${fmtD(r.done_at)}</span> <button class="btn sm g" data-act="settle" data-id="${r.student_id}" data-v="0">되돌리기</button>`:wkTarget(r)?`<button class="btn sm p" data-act="settle" data-id="${r.student_id}" data-v="1">입력 완료</button>`:'<span class="muted">대상 아님</span>'}</td></tr>`).join('')}</tbody></table></div>
       <div class="row end" style="margin-top:12px"><button class="btn" data-act="copyWeek">미입력 명단 복사</button><button class="btn p" data-act="settleAll" ${todo.length?'':'disabled'}>미입력 ${todo.length}명 모두 입력 완료 처리</button></div>`:'<div class="empty">등록된 학생이 없습니다.</div>'}
-     <form class="row" id="fRate" style="margin-top:14px"><label for="rate" class="tiny" style="font-weight:600">환산 기준 · 1 XP =</label><input class="inp" id="rate" type="number" min="0" max="100" step="0.1" value="${rate}" style="width:90px"><span class="tiny">포인트</span><button class="btn sm">적용</button><span class="tiny muted">0으로 두면 포인트 열을 숨기고 XP만 보여 줍니다.</span></form>
+     <form class="row" id="fRate" style="margin-top:14px"><label for="rate" class="tiny" style="font-weight:600">환산 기준 · 1 XP =</label><input class="inp" id="rate" type="number" min="0" max="100" step="0.1" value="${rate}" style="width:90px"><span class="tiny">포인트</span><button class="btn sm">적용</button><span class="tiny muted">0이면 1 XP = 1 포인트로 계산합니다. 진화 보너스는 환산 없이 그대로 더합니다.</span></form>
      <div class="note" style="margin-top:12px">주 1회 순서: ① 이 표를 보며 ${PN()} 지급 화면에서 학생별로 지급 → ② 지급한 학생마다 [입력 완료] → ③ 미입력 0명 확인. 입력 완료 후 취소·추가 승인된 건은 다음 확인 때 숫자가 달라질 수 있습니다.</div></section>`;
   }else if(UI.ttab==='students'){
     const pend=W.profiles.filter(p=>p.role==='student'&&!p.active);
@@ -756,6 +759,8 @@ function viewTeacher(){
     main=`<div class="grid g2"><form class="card stack" id="fSet"><h3>레벨·진화 기준</h3>
       <div class="row"><label class="field" style="flex:1">레벨당 필요 XP<input id="sPer" type="number" min="50" max="5000" value="${s.xp_per_level}"></label><label class="field" style="flex:1">최고 레벨<input id="sMax" type="number" min="10" max="100" value="${s.max_level}"></label></div>
       <div class="row"><label class="field" style="flex:1">Elite 진화 레벨 (+ 진화석)<input id="sE1" type="number" min="2" value="${s.evolve_levels[0]}"></label><label class="field" style="flex:1">Legend 진화 레벨 (+ 전설석)<input id="sE2" type="number" min="3" value="${s.evolve_levels[1]}"></label></div>
+      <div class="row"><label class="field" style="flex:1">Elite 진화 보너스 (${PN()})<input id="sB1" type="number" min="0" max="10000" value="${(s.evolve_bonus||[500,1000])[0]}"></label><label class="field" style="flex:1">Legend 진화 보너스 (${PN()})<input id="sB2" type="number" min="0" max="10000" value="${(s.evolve_bonus||[500,1000])[1]}"></label></div>
+      <p class="tiny muted">진화 보너스는 XP가 아니라 주간 정산의 ‘입력할 ${PN()}’에 더해집니다. 0이면 주지 않습니다.</p>
       <label class="field">주간 XP 목표<input id="sWk" type="number" min="0" value="${s.weekly_xp_goal}"></label>
       <h3 style="margin:6px 0 0">활동 목록 <small>이름·XP·학생 요청 여부 수정 · 음수는 차감</small></h3>
       <div class="tw"><table><thead><tr><th>활동 이름</th><th class="r">XP</th><th>스탯</th><th>진화석</th><th>학생 요청</th><th></th></tr></thead><tbody id="actRows">${[...actList(s),'reading'].map(k=>actRow(k,ACT[k]?ACT[k][1]:k,s.activity_xp[k]??0,(s.self_report_acts||[]).includes(k),(s.activity_stats||{})[k],(s.activity_stones||{})[k])).join('')}</tbody></table></div>
@@ -861,8 +866,8 @@ const A={
   async tab(d){UI.tab=d.t;if(d.t==='map')await loadMap();render();scrollTo(0,0)},async ttab(d){UI.ttab=d.t;if(d.t==='weekly')await loadWeekly();if(d.t==='map')await loadMap();render()},
   async wkMove(d){UI.wk=Math.min(0,UI.wk+Number(d.d));await loadWeekly();render()},
   settle(d){call('settle',{students:[d.id],start:ymd(wkStart()),done:d.v==='1'},d.v==='1'?'입력 완료로 표시했습니다.':'미입력으로 되돌렸습니다.')},
-  settleAll(){const ids=UI.weekly.filter(r=>r.n>0&&!r.done_at).map(r=>r.student_id);if(ids.length)call('settle',{students:ids,start:ymd(wkStart()),done:true},ids.length+'명을 입력 완료로 표시했습니다.')},
-  copyWeek(){const rate=Number(W.set.point_rate)||0,ws=wkStart(),we=new Date(ws);we.setDate(we.getDate()+6);const L=UI.weekly.filter(r=>r.n>0&&!r.done_at).sort((a,b)=>stuName(a.student_id).localeCompare(stuName(b.student_id),'ko')).map(r=>`${stuName(r.student_id)}\t${r.n}건\t${r.xp}XP${rate?'\t'+Math.round(r.xp*rate)+'P':''}`);
+  settleAll(){const ids=UI.weekly.filter(r=>wkTarget(r)&&!r.done_at).map(r=>r.student_id);if(ids.length)call('settle',{students:ids,start:ymd(wkStart()),done:true},ids.length+'명을 입력 완료로 표시했습니다.')},
+  copyWeek(){const ws=wkStart(),we=new Date(ws);we.setDate(we.getDate()+6);const L=UI.weekly.filter(r=>wkTarget(r)&&!r.done_at).sort((a,b)=>stuName(a.student_id).localeCompare(stuName(b.student_id),'ko')).map(r=>`${stuName(r.student_id)}\t${r.n}건\t${r.xp}XP${Number(r.bonus)?'\t진화 보너스 '+r.bonus:''}\t${wkAmt(r)}P`);
     if(!L.length)return toast('미입력 학생이 없습니다.');navigator.clipboard.writeText(`${(W.set.point_name||'포인트')} 주간 입력 ${fmtD(ws)}–${fmtD(we)}\n`+L.join('\n')).then(()=>toast('미입력 명단을 복사했습니다.')).catch(()=>toast('복사하지 못했습니다. 표를 직접 선택해 복사해 주세요.',true))},
   pickStarter(d){const n=$('#nick')?.value;UI.starter=d.id;render();if(n)$('#nick').value=n},
   async confirmStarter(){const sp=spOf(UI.starter),nick=$('#nick').value.trim();if(await call('choose_starter',{species:UI.starter,nickname:nick}))toast(`모험을 시작합니다 · ${nick||sp.name}`)},
@@ -885,7 +890,7 @@ const A={
   mapWho(d){toast(d.n)},
   evoOpen(d){const m=W.monsters.find(x=>x.id===d.id);if(!m)return;const sp=spOf(m.species_id),o=evoOpts(m);if(!o.length)return toast('지금은 진화할 수 없습니다.',true);
     modal(`<h2>${esc(m.nickname||sp.name)} 진화 <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack"><div class="card"><div class="forms" style="grid-template-columns:1fr 1fr">${[m.stage,m.stage+1].map(s=>`<div>${monsterSVG(sp,s)}${STN[s]}</div>`).join('')}</div></div>
-      <p class="muted">사용할 돌을 고르세요. 진화는 되돌릴 수 없습니다.</p>${o.map(([u,t])=>`<button class="btn p" data-act="evoDo" data-id="${m.id}" data-u="${u}">${t}로 ${STN[m.stage+1]} 진화</button>`).join('')}</div>`)},
+      ${evoBonus(m.stage+1)?`<p class="pill ok" style="align-self:center">진화하면 ${PN()} +${evoBonus(m.stage+1).toLocaleString()}</p>`:''}<p class="muted">사용할 돌을 고르세요. 진화는 되돌릴 수 없습니다.</p>${o.map(([u,t])=>`<button class="btn p" data-act="evoDo" data-id="${m.id}" data-u="${u}">${t}로 ${STN[m.stage+1]} 진화</button>`).join('')}</div>`)},
   async evoDo(d){closeModal();await call('evolve',{monster:d.id,use:d.u})},
   qAct(d){UI.qa=d.a;render()},
   actAdd(){const r=document.querySelector('#actRows tr[data-k="reading"]');if(!r)return;if(document.querySelectorAll('#actRows tr[data-k]').length>40)return toast('활동은 40개까지 만들 수 있습니다.',true);
@@ -918,13 +923,13 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
     else if(id==='fTeacher'){document.body.classList.add('busy');await api.signupTeacher($('#tId').value.trim().toLowerCase(),$('#tPw').value,$('#tName').value.trim(),$('#tCode').value.trim(),$('#tAc').value);await refresh();toast('선생님 계정이 준비되었습니다.')}
     else if(id==='fBook'){if(await call('request_book',{title:$('#bTitle').value},'선생님께 완독 확인을 요청했습니다.'))0}
     else if(id==='fAssign'){const xp=Number($('#aXp').value);const r=await call('assign_missions',{students:[...UI.qs],activity:UI.qa,title:$('#aTitle').value.trim()||ACT[UI.qa][1],xp:Number.isFinite(xp)?xp:null,due:$('#aDue').value||today(),batch:uuid(),approve:false},r=>`${r.done}명에게 배정했습니다.`);if(r){UI.qs.clear();render()}}
-    else if(id==='fSet'){const n=x=>Math.round(Number($(x).value));const e1=n('#sE1'),e2=n('#sE2');if(!(e1<e2&&e2<=n('#sMax')))return toast('진화 레벨은 Elite < Legend ≤ 최고 레벨 순서여야 합니다.',true);
+    else if(id==='fSet'){const n=x=>Math.round(Number($(x).value));const e1=n('#sE1'),e2=n('#sE2');if(!(e1<e2&&e2<=n('#sMax')))return toast('진화 레벨은 Elite < Legend ≤ 최고 레벨 순서여야 합니다.',true);const eb=[n('#sB1'),n('#sB2')];if(eb.some(x=>!(x>=0&&x<=10000)))return toast('진화 보너스는 0~10000 사이로 입력해 주세요.',true);
       let A,zones;try{A=readActs();zones=[...document.querySelectorAll('#zoneRows tr')].map(tr=>({from:Math.round(Number(tr.querySelector('.zf').value)),name:tr.querySelector('.zn').value.trim(),ko:tr.querySelector('.zk').value.trim()}));
         zones.forEach((z,i)=>{if(!z.name)throw new Error('지역 이름을 입력해 주세요.');if(i===0?z.from!==1:!(z.from>zones[i-1].from))throw new Error('마을 시작 레벨은 위에서 아래로 점점 커져야 합니다.')});
         const sri=[...document.querySelectorAll('#srRows .sra')];var srs=(W.set.stat_rewards||[]).map((r,i)=>{const at=Number(sri[i]?sri[i].value:r.at);if(!Number.isInteger(at)||at<1||at>1e6)throw new Error('필요 스탯은 1 이상의 정수로 입력해 주세요.');return{...r,at}})}catch(err){return toast(err.message,true)}const{ax,lb,list,self,stats,stones}=A;const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
       document.body.classList.add('busy');const sg=$('#sStg').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8);
       const cur=k=>k==='stages'?stg():k==='activity_labels'?(W.set.activity_labels||{}):W.set[k];
-      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['activity_stats',stats],['activity_stones',stones],['stat_rewards',srs],['map_name_mode',$('#sMapName').value],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
+      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['evolve_bonus',eb],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['activity_stats',stats],['activity_stones',stones],['stat_rewards',srs],['map_name_mode',$('#sMapName').value],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
     else if(id==='fRate'){const v=Number($('#rate').value);if(!(v>=0&&v<=100))return toast('환산 기준은 0~100 사이로 입력해 주세요.',true);await call('set_setting',{key:'point_rate',value:v},'환산 기준을 적용했습니다.')}
     else if(id==='fRevoke'){const why=$('#rvWhy').value.trim(),d=f.dataset;closeModal();const ok=d.m?await call('revoke_mission',{id:d.m,reason:why},'지급을 취소했습니다.'):await call('revoke_book',{id:d.b,reason:why},'독서 실적을 취소했습니다.');if(ok){(W.ledgerRevoked=W.ledgerRevoked||new Set()).add(d.m||d.b);render()}}
     else if(id==='fAddBook'){const sid=f.dataset.id;if(await call('add_book',{student:sid,title:$('#abTitle').value,comp:null},'독서 실적을 등록했습니다.'))openStudent(sid)}

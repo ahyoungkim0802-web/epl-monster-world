@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.7: 진화 보너스. Elite·Legend로 진화하면 그 주 주간 정산의 입력할 포인트에 보너스(기본 500·1000)를 더함(XP 아님)
 -- v2.6: 진화 = 레벨 + 진화석. AR +1 → 진화석, NELT +1 → 전설석. Elite: 진화석·전설석 1개 / Legend: 전설석 1개 또는 진화석 2개
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
@@ -218,7 +219,7 @@ do $$
 declare d record;
 begin
   for d in select * from jsonb_each('{
-    "xp_per_level": 1000, "max_level": 50, "evolve_levels": [15,35], "weekly_xp_goal": 800, "point_rate": 0,
+    "xp_per_level": 1000, "max_level": 50, "evolve_levels": [15,35], "evolve_bonus": [500,1000], "weekly_xp_goal": 800, "point_rate": 0,
     "point_name": "포인트",
     "stages": ["Reader","Builder","Writer","Speaker","Author"],
     "activity_xp": {"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
@@ -951,7 +952,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -978,6 +979,10 @@ begin
            or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
            or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
     raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
+  if p_key = 'evolve_bonus' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) <> 2 or exists (
+       select 1 from jsonb_array_elements(p_value) e
+        where jsonb_typeof(e) <> 'number' or (e #>> '{}')::numeric not between 0 and 10000 or (e #>> '{}')::numeric <> round((e #>> '{}')::numeric))) then
+    raise exception '진화 보너스는 0~10000 사이 정수여야 합니다.'; end if;
   if p_key = 'map_name_mode' and (jsonb_typeof(p_value) <> 'string' or (p_value #>> '{}') not in ('nickname','masked','real','hidden')) then
     raise exception '이름 표시 방식이 올바르지 않습니다.'; end if;
   if p_key = 'map_zones' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) not between 1 and 8 or exists (
@@ -1021,11 +1026,15 @@ begin
 end $$;
 
 -- 한 주(월~일, 한국 시간) 동안 승인된 내역을 학생별로 합산. 취소된 지급은 제외.
+-- bonus: 그 주에 진화한 몬스터의 진화 보너스(evolve_bonus[Elite, Legend]) 합계. XP가 아니라 보상 포인트로만 입력합니다.
+drop function if exists mw_weekly(date);
 create or replace function mw_weekly(p_start date)
-returns table(student_id uuid, n bigint, xp bigint, acts jsonb, done_at timestamptz)
+returns table(student_id uuid, n bigint, xp bigint, acts jsonb, done_at timestamptz, bonus bigint)
 language plpgsql stable security definer set search_path = public as $$
+declare v_bonus jsonb;
 begin
   perform mw_need_teacher();
+  v_bonus := coalesce(mw_setting(mw_my_academy(), 'evolve_bonus'), '[500,1000]'::jsonb);
   return query
   with g as (
     select l.student_id as sid, l.reason, l.amount from mw_ledger l
@@ -1039,7 +1048,11 @@ begin
     coalesce((select sum(a.c) from a where a.sid = p.id), 0)::bigint,
     coalesce((select sum(a.x) from a where a.sid = p.id), 0)::bigint,
     coalesce((select jsonb_object_agg(a.reason, a.c) from a where a.sid = p.id), '{}'::jsonb),
-    (select s.done_at from mw_settlements s where s.student_id = p.id and s.week_start = p_start)
+    (select s.done_at from mw_settlements s where s.student_id = p.id and s.week_start = p_start),
+    coalesce((select sum(coalesce((v_bonus ->> (split_part(r.reward_key, ':', 3)::int - 2))::int, 0))
+                from mw_rewards r
+               where r.student_id = p.id and r.reward_key like 'evo:%'
+                 and (r.granted_at at time zone 'Asia/Seoul')::date between p_start and p_start + 6), 0)::bigint
   from mw_profiles p where p.role = 'student' and p.active and p.academy_id = mw_my_academy();
 end $$;
 
