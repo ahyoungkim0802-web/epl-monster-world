@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.16: 배틀에 내 몬스터 힘 반영(레벨·진화·어휘 스탯 치명타), 문제 유형 섞기(뜻 고르기·영어 고르기·듣기·철자)
 -- v2.15: 단어 배틀(단어장 업로드, 단어 동굴, 서버 출제·채점, 배틀 XP·진화석 조각)
 -- v2.14: 담당 선생님 변경을 모든 선생님이 할 수 있게. 선생님 이름 목록(mw_teacher_names, 이름만)
 -- v2.13: 담당 선생님 변경(mw_set_teacher, 원장 전용)
@@ -227,6 +228,8 @@ create table if not exists mw_battles (
   created_at timestamptz not null default now(),
   finished_at timestamptz
 );
+alter table mw_battles add column if not exists power int not null default 1;     -- v2.16: 정답 1번의 공격력(시작할 때 내 몬스터로 계산)
+alter table mw_battles add column if not exists crit numeric not null default 0;   -- 치명타 확률(0~1)
 create index if not exists mw_battles_student on mw_battles(student_id, day);
 create index if not exists mw_battles_won on mw_battles(student_id, book, unit, kind) where status = 'won' and not revoked;
 
@@ -300,7 +303,7 @@ begin
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
-    "battle": {"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":10,"gate_hp":20,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab"},
+    "battle": {"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":120,"gate_hp":240,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab","dmg_base":10,"dmg_lv_div":5,"dmg_lv_max":10,"dmg_elite":3,"dmg_legend":6,"crit_per":200,"crit_max":25,"mix_rev":25,"mix_listen":25},
     "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
     "activity_stats": {"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
     "stat_rewards": [{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
@@ -345,6 +348,11 @@ update mw_profiles p set epl_stage = 'Creator'
        = '["Reader","Builder","Writer","Speaker","Author"]'::jsonb;
 update mw_settings set value = '["Reader","Builder","Writer","Creator","Author"]'::jsonb
  where key = 'stages' and value = '["Reader","Builder","Writer","Speaker","Author"]'::jsonb;
+
+-- v2.16: 배틀 설정에 새 항목(공격력·치명타·문제 유형)을 더하고, 예전 기본 체력(10/20)은 공격력 단위에 맞게 120/240으로
+update mw_settings set value = '{"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":120,"gate_hp":240,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab","dmg_base":10,"dmg_lv_div":5,"dmg_lv_max":10,"dmg_elite":3,"dmg_legend":6,"crit_per":200,"crit_max":25,"mix_rev":25,"mix_listen":25}'::jsonb || value where key = 'battle';
+update mw_settings set value = value || '{"hp":120,"gate_hp":240}'::jsonb
+ where key = 'battle' and value ->> 'hp' = '10' and value ->> 'gate_hp' = '20';
 
 -- v2.1 보충: 이미 있는 설정에 새 활동(북라이팅·북퀴즈)만 추가합니다. 학원이 바꾼 값은 그대로 둡니다.
 update mw_settings set value = '{"bookwriting":30,"bookquiz":30}'::jsonb || value
@@ -627,7 +635,7 @@ language sql immutable as $$ select ((d - date '2024-01-01') / 7) * 5 + least((d
 
 create or replace function mw_battle_cfg(p_ac uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
-  select '{"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":10,"gate_hp":20,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab"}'::jsonb || coalesce(mw_setting(p_ac, 'battle'), '{}'::jsonb);
+  select '{"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":120,"gate_hp":240,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab","dmg_base":10,"dmg_lv_div":5,"dmg_lv_max":10,"dmg_elite":3,"dmg_legend":6,"crit_per":200,"crit_max":25,"mix_rev":25,"mix_listen":25}'::jsonb || coalesce(mw_setting(p_ac, 'battle'), '{}'::jsonb);
 $$;
 
 create or replace function mw_battle_shards(p_student uuid) returns int
@@ -1183,7 +1191,8 @@ begin
   if p_key = 'battle' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
         where e.key not in ('first_xp','rewin_xp','gate_xp','gate_rewin_xp','shard_first','shard_rewin','shard_gate','shard_gate_rewin',
-                            'shards_per_stone','over_ratio','streak','hearts','hp','gate_hp','pool','gate_q','combo','advance_act')
+                            'shards_per_stone','over_ratio','streak','hearts','hp','gate_hp','pool','gate_q','combo','advance_act',
+                            'dmg_base','dmg_lv_div','dmg_lv_max','dmg_elite','dmg_legend','crit_per','crit_max','mix_rev','mix_listen')
            or case e.key
                 when 'streak' then jsonb_typeof(e.value) <> 'array' or jsonb_array_length(e.value) > 6 or exists (
                     select 1 from jsonb_array_elements(e.value) s
@@ -1192,7 +1201,7 @@ begin
                 when 'advance_act' then jsonb_typeof(e.value) <> 'string' or (e.value #>> '{}') !~ '^[a-z0-9_]{1,24}$'
                 when 'over_ratio' then jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric not between 0 and 1
                 else jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric <> round((e.value #>> '{}')::numeric)
-                     or (e.value #>> '{}')::numeric not between (case when e.key in ('shards_per_stone','hearts','hp','gate_hp','pool','gate_q','combo') then 1 else 0 end) and 10000
+                     or (e.value #>> '{}')::numeric not between (case when e.key in ('shards_per_stone','hearts','hp','gate_hp','pool','gate_q','combo','dmg_base','dmg_lv_div','crit_per') then 1 else 0 end) and 10000
               end)) then
     raise exception '단어 배틀 설정이 올바르지 않습니다.'; end if;
   if p_key = 'streak_rewards' and (jsonb_typeof(p_value) <> 'object' or (select count(*) from jsonb_object_keys(p_value)) > 10 or exists (
@@ -1416,14 +1425,17 @@ end $$;
 -- 화면에 보낼 지금 문제(정답은 보내지 않음)
 create or replace function mw_battle_state(b mw_battles) returns jsonb
 language plpgsql stable as $$
-declare it jsonb;
+declare it jsonb; t text;
 begin
-  if b.status = 'playing' and jsonb_array_length(b.queue) > 0 then it := b.items -> ((b.queue ->> 0)::int); end if;
+  if b.status = 'playing' and jsonb_array_length(b.queue) > 0 then it := b.items -> ((b.queue ->> 0)::int); t := it ->> 't'; end if;
   return jsonb_build_object('id', b.id, 'kind', b.kind, 'book', b.book, 'unit', b.unit, 'status', b.status,
     'hp', b.hp, 'hp_max', b.hp_max, 'hearts', b.hearts, 'hearts_max', b.hearts_max, 'combo', b.combo,
-    'q', case when it is null then null else jsonb_build_object('n', b.qn, 't', it ->> 't',
-           'prompt', case when it ->> 't' = 'spell' then it ->> 'ko' else it ->> 'en' end,
-           'options', case when it ->> 't' = 'spell' then null else it -> 'o' end) end);
+    'power', b.power, 'crit', round(b.crit * 100),
+    'q', case when it is null then null else jsonb_build_object('n', b.qn, 't', t,
+           -- mc: 영어 → 뜻 / listen: 소리만(say) → 뜻 / rev: 뜻 → 영어 고르기 / spell: 뜻 → 영어 쓰기
+           'prompt', case when t in ('spell','rev') then it ->> 'ko' when t = 'listen' then null else it ->> 'en' end,
+           'say', case when t = 'listen' then it ->> 'en' else null end,
+           'options', case when t = 'spell' then null when t = 'rev' then it -> 'oe' else it -> 'o' end) end);
 end $$;
 
 -- 승리 보상(서버만 계산, 판마다 한 번)
@@ -1482,11 +1494,13 @@ end $$;
 create or replace function mw_battle_start(p_book int, p_unit int, p_gate boolean) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_ac uuid := mw_my_academy(); v_cfg jsonb; pos mw_word_pos; v_units int[]; v_items jsonb := '[]'::jsonb;
-        r record; v_i int := 0; v_opts jsonb; v_hp int; b mw_battles; v_today date := mw_seoul_today(); v_gate boolean := coalesce(p_gate, false);
+        r record; v_i int := 0; v_opts jsonb; v_opte jsonb; v_hp int; b mw_battles; v_today date := mw_seoul_today(); v_gate boolean := coalesce(p_gate, false);
+        m mw_monsters; v_power int; v_crit numeric; v_t text; v_rnd numeric;
 begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
   perform 1 from mw_profiles where id = auth.uid() for update;
-  if (select active_monster from mw_profiles where id = auth.uid()) is null then raise exception '먼저 몬스터를 골라 주세요.'; end if;
+  select * into m from mw_monsters where id = (select active_monster from mw_profiles where id = auth.uid()) and hatched;
+  if not found then raise exception '먼저 몬스터를 골라 주세요.'; end if;
   select * into pos from mw_word_pos where student_id = auth.uid();
   if not found then raise exception '선생님이 아직 단어장 위치를 정하지 않았습니다.'; end if;
   if not mw_battle_day_ok(auth.uid(), v_today) then raise exception '오늘 "다 했어요"를 하나 남기면 단어 동굴이 열려요.'; end if;
@@ -1503,34 +1517,43 @@ begin
   else
     v_units := array[p_unit];
   end if;
+  -- 내 몬스터의 힘: 기본 + 레벨 보너스 + 진화 보너스, 치명타 확률은 어휘 스탯에서
+  v_power := (v_cfg ->> 'dmg_base')::int + least((v_cfg ->> 'dmg_lv_max')::int, m.level / greatest(1, (v_cfg ->> 'dmg_lv_div')::int))
+             + case m.stage when 3 then (v_cfg ->> 'dmg_legend')::int when 2 then (v_cfg ->> 'dmg_elite')::int else 0 end;
+  v_crit := least((v_cfg ->> 'crit_max')::numeric, coalesce((mw_stat_values(auth.uid()) ->> 'vocab')::numeric, 0) / greatest(1, (v_cfg ->> 'crit_per')::numeric)) / 100;
   update mw_battles set status = 'quit', finished_at = now() where student_id = auth.uid() and status = 'playing';
   for r in
     with w as (select lower(btrim(en)) as k, min(btrim(en)) as en, string_agg(distinct btrim(ko), ' / ') as ko
                  from mw_words where academy_id = v_ac and book = p_book and unit = any(v_units) group by 1)
     select w.k, w.en, w.ko from w
-      left join mw_word_misses m on m.student_id = auth.uid() and m.academy_id = v_ac and m.k = w.k
-     order by (coalesce(m.misses, 0) > 0) desc, random()
+      left join mw_word_misses mm on mm.student_id = auth.uid() and mm.academy_id = v_ac and mm.k = w.k
+     order by (coalesce(mm.misses, 0) > 0) desc, random()
      limit (case when v_gate then (v_cfg ->> 'gate_q')::int else (v_cfg ->> 'pool')::int end)
   loop
-    -- 오답 보기: 같은 Unit의 다른 뜻 먼저, 모자라면 같은 권에서
-    select coalesce(jsonb_agg(z.ko), '[]'::jsonb) into v_opts from (
-      select y.ko from (
-        select string_agg(distinct btrim(w2.ko), ' / ') as ko, bool_or(w2.unit = any(v_units)) as near
+    -- 오답 보기(뜻·영어): 같은 Unit 먼저, 모자라면 같은 권에서
+    select coalesce(jsonb_agg(z.ko), '[]'::jsonb), coalesce(jsonb_agg(z.en), '[]'::jsonb) into v_opts, v_opte from (
+      select y.ko, y.en from (
+        select string_agg(distinct btrim(w2.ko), ' / ') as ko, min(btrim(w2.en)) as en, bool_or(w2.unit = any(v_units)) as near
           from mw_words w2 where w2.academy_id = v_ac and w2.book = p_book and lower(btrim(w2.en)) <> r.k
          group by lower(btrim(w2.en))) y
        where y.ko <> r.ko
        order by y.near desc, random() limit 3) z;
     select jsonb_agg(x order by random()) into v_opts from jsonb_array_elements(v_opts || jsonb_build_array(r.ko)) x;
-    v_items := v_items || jsonb_build_array(jsonb_build_object('k', r.k, 'en', r.en, 'ko', r.ko,
-                 't', case when v_gate and v_i % 2 = 1 then 'spell' else 'mc' end, 'o', v_opts));
+    select jsonb_agg(x order by random()) into v_opte from jsonb_array_elements(v_opte || jsonb_build_array(r.en)) x;
+    v_rnd := random() * 100;
+    v_t := case when v_gate and v_i % 2 = 1 then 'spell'
+                when v_rnd < (v_cfg ->> 'mix_rev')::numeric then 'rev'
+                when v_rnd < (v_cfg ->> 'mix_rev')::numeric + (v_cfg ->> 'mix_listen')::numeric then 'listen'
+                else 'mc' end;
+    v_items := v_items || jsonb_build_array(jsonb_build_object('k', r.k, 'en', r.en, 'ko', r.ko, 't', v_t, 'o', v_opts, 'oe', v_opte));
     v_i := v_i + 1;
   end loop;
   if v_i = 0 then raise exception '이 Unit에는 아직 단어가 없습니다.'; end if;
   v_hp := (v_cfg ->> (case when v_gate then 'gate_hp' else 'hp' end))::int;
-  insert into mw_battles(student_id, academy_id, day, book, unit, kind, items, queue, qn, hearts, hearts_max, hp, hp_max)
+  insert into mw_battles(student_id, academy_id, day, book, unit, kind, items, queue, qn, hearts, hearts_max, hp, hp_max, power, crit)
   values (auth.uid(), v_ac, v_today, p_book, p_unit, case when v_gate then 'gate' else 'unit' end, v_items,
           (select jsonb_agg(g) from generate_series(0, v_i - 1) g), 1,
-          (v_cfg ->> 'hearts')::int, (v_cfg ->> 'hearts')::int, v_hp, v_hp)
+          (v_cfg ->> 'hearts')::int, (v_cfg ->> 'hearts')::int, v_hp, v_hp, v_power, v_crit)
   returning * into b;
   return mw_battle_state(b);
 end $$;
@@ -1538,7 +1561,7 @@ end $$;
 -- 학생: 답하기. 서버가 채점하고 다음 문제를 돌려줌. 끝나면 보상도 서버가 지급
 create or replace function mw_battle_answer(p_battle uuid, p_n int, p_answer text) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare b mw_battles; v_cfg jsonb; it jsonb; v_cur int; v_ok boolean; v_dmg int := 0; v_rew jsonb;
+declare b mw_battles; v_cfg jsonb; it jsonb; v_cur int; v_ok boolean; v_dmg int := 0; v_crit boolean := false; v_rew jsonb; t text;
 begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
   select * into b from mw_battles where id = p_battle and student_id = auth.uid() for update;
@@ -1546,12 +1569,14 @@ begin
   if b.status <> 'playing' then raise exception '이미 끝난 배틀입니다.'; end if;
   if p_n is distinct from b.qn then raise exception '이미 답한 문제입니다.'; end if;
   v_cfg := mw_battle_cfg(b.academy_id);
-  v_cur := (b.queue ->> 0)::int; it := b.items -> v_cur;
-  if it ->> 't' = 'spell' then v_ok := lower(btrim(coalesce(p_answer, ''))) = lower(btrim(it ->> 'en'));
+  v_cur := (b.queue ->> 0)::int; it := b.items -> v_cur; t := it ->> 't';
+  if t in ('spell','rev') then v_ok := lower(btrim(coalesce(p_answer, ''))) = lower(btrim(it ->> 'en'));
   else v_ok := coalesce(p_answer, '') = it ->> 'ko'; end if;
   if v_ok then
     b.combo := b.combo + 1;
-    v_dmg := case when b.combo % greatest(1, (v_cfg ->> 'combo')::int) = 0 then 2 else 1 end;   -- 5번째·10번째 연속 정답은 -2
+    v_crit := random() < b.crit;
+    v_dmg := round(b.power * (case when b.combo % greatest(1, (v_cfg ->> 'combo')::int) = 0 then 2 else 1 end)
+                           * (case when v_crit then 1.5 else 1 end))::int;      -- 5번째·10번째 연속 정답 2배, 치명타 1.5배
     b.hp := greatest(0, b.hp - v_dmg);
     b.queue := b.queue - 0;
     update mw_word_misses set misses = greatest(0, misses - 1) where student_id = auth.uid() and academy_id = b.academy_id and k = it ->> 'k';
@@ -1569,8 +1594,8 @@ begin
    where id = b.id;
   if b.status = 'won' then v_rew := mw_battle_reward(b.id); end if;
   select * into b from mw_battles where id = p_battle;
-  return mw_battle_state(b) || jsonb_build_object('correct', v_ok, 'dmg', v_dmg,
-    'answer', case when it ->> 't' = 'spell' then it ->> 'en' else it ->> 'ko' end, 'reward', v_rew);
+  return mw_battle_state(b) || jsonb_build_object('correct', v_ok, 'dmg', v_dmg, 'crit', v_crit, 'word', it ->> 'en',
+    'answer', case when t in ('spell','rev') then it ->> 'en' else it ->> 'ko' end, 'reward', v_rew);
 end $$;
 
 -- 학생: 단어 동굴 현황(단어는 보내지 않음)

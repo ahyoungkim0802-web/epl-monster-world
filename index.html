@@ -408,7 +408,7 @@ const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Creat
   map_zones:[{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
   activity_stones:{ar:'evo',nelt:'legend'},
   streak_rewards:{classcard:{days:7,stone:'evo'}},
-  battle:{first_xp:30,rewin_xp:5,gate_xp:100,gate_rewin_xp:5,shard_first:5,shard_rewin:1,shard_gate:20,shard_gate_rewin:1,shards_per_stone:100,over_ratio:0.25,streak:[{days:3,mult:1.2},{days:7,mult:1.5},{days:30,mult:2}],hearts:3,hp:10,gate_hp:20,pool:10,gate_q:20,combo:5,advance_act:'vocab'},
+  battle:{first_xp:30,rewin_xp:5,gate_xp:100,gate_rewin_xp:5,shard_first:5,shard_rewin:1,shard_gate:20,shard_gate_rewin:1,shards_per_stone:100,over_ratio:0.25,streak:[{days:3,mult:1.2},{days:7,mult:1.5},{days:30,mult:2}],hearts:3,hp:120,gate_hp:240,pool:10,gate_q:20,combo:5,advance_act:'vocab',dmg_base:10,dmg_lv_div:5,dmg_lv_max:10,dmg_elite:3,dmg_legend:6,crit_per:200,crit_max:25,mix_rev:25,mix_listen:25},
   activity_stats:{"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
   stat_rewards:[{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
   reading_milestones:[{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]};
@@ -417,7 +417,7 @@ const Demo={
   async init(){try{this.st=JSON.parse(localStorage.getItem(this.KEY))}catch(e){} if(!this.st)this.seed();
     for(const p of this.st.profiles)if(p.id==='t1'&&p.is_admin===undefined)p.is_admin=true;
     if(!this.st.words){this.st.words=DEMO_WORDS.map(([book,unit,no,en,ko])=>({book,unit,no,en,ko}));this.st.wordPos=[{student_id:'minjun',book:1,unit:3,start_book:1,start_unit:1},{student_id:'seoa',book:1,unit:1,start_book:1,start_unit:1},{student_id:'jiho',book:1,unit:5,start_book:1,start_unit:1}]}
-    this.st.wordPos=this.st.wordPos||[];this.st.battles=this.st.battles||[];this.st.misses=this.st.misses||[];
+    if(this.st.set.battle&&this.st.set.battle.hp===10&&this.st.set.battle.gate_hp===20)Object.assign(this.st.set.battle,{hp:120,gate_hp:240});this.st.wordPos=this.st.wordPos||[];this.st.battles=this.st.battles||[];this.st.misses=this.st.misses||[];
     const D=JSON.parse(JSON.stringify(DEF_SET));this.st.set={...D,...this.st.set,activity_xp:{...D.activity_xp,...(this.st.set||{}).activity_xp}}},
   save(){try{localStorage.setItem(this.KEY,JSON.stringify(this.st))}catch(e){}},
   seed(){
@@ -498,8 +498,8 @@ const Demo={
   advance(s){const p=this.st.wordPos.find(x=>x.student_id===s);if(!p)return;const ws=this.st.words;if(ws.some(w=>w.book===p.book&&w.unit===p.unit+1)||!ws.length)p.unit++;else{const nx=ws.filter(w=>w.book===p.book+1).map(w=>w.unit);if(nx.length){p.book++;p.unit=Math.min(...nx)}}},
   recheck(s,d){if(!d||this.dayOk(s,d))return;for(const b of this.st.battles.filter(x=>x.student_id===s&&x.day===d)){if(b.status==='playing'){b.status='quit';continue}if(b.status!=='won'||b.revoked)continue;b.revoked=true;
     if(b.xp>0){const l=this.st.ledger.find(x=>x.battle_id===b.id&&x.kind==='battle');if(l)this.xp(s,l.monster_id,-b.xp,'battle_revoke','배틀 회수 · 요청 반려',null,null,b.id)}}},
-  bState(b){const it=b.status==='playing'&&b.queue.length?b.items[b.queue[0]]:null;return{id:b.id,kind:b.kind,book:b.book,unit:b.unit,status:b.status,hp:b.hp,hp_max:b.hp_max,hearts:b.hearts,hearts_max:b.hearts_max,combo:b.combo,
-    q:it?{n:b.qn,t:it.t,prompt:it.t==='spell'?it.ko:it.en,options:it.t==='spell'?null:it.o.slice()}:null}},
+  bState(b){const it=b.status==='playing'&&b.queue.length?b.items[b.queue[0]]:null,t=it&&it.t;return{id:b.id,kind:b.kind,book:b.book,unit:b.unit,status:b.status,hp:b.hp,hp_max:b.hp_max,hearts:b.hearts,hearts_max:b.hearts_max,combo:b.combo,power:b.power,crit:Math.round(b.crit*100),
+    q:it?{n:b.qn,t,prompt:t==='spell'||t==='rev'?it.ko:t==='listen'?null:it.en,say:t==='listen'?it.en:null,options:t==='spell'?null:t==='rev'?it.oe.slice():it.o.slice()}:null}},
   bReward(b){if(b.status!=='won'||b.rewarded)return null;if(!this.dayOk(b.student_id,b.day)){b.revoked=true;b.rewarded=true;return{xp:0,shards:0,void:true}}
     const c=this.bCfg(),g=b.kind==='gate',oth=this.st.battles.filter(x=>x.student_id===b.student_id&&x.book===b.book&&x.unit===b.unit&&x.kind===b.kind&&x.status==='won'&&!x.revoked&&x.id!==b.id),first=!oth.length,td=oth.some(x=>x.day===b.day);
     let base=0,sh=0;if(first){base=g?c.gate_xp:c.first_xp;sh=g?c.shard_gate:c.shard_first}else if(!td){base=g?c.gate_rewin_xp:c.rewin_xp;sh=g?c.shard_gate_rewin:c.shard_rewin}
@@ -571,7 +571,7 @@ const Demo={
       if(a.key==='activity_stats'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!['read','write','vocab','grit'].includes(x))))throw new Error('활동별 스탯 설정이 올바르지 않습니다.');
       if(a.key==='stat_rewards'&&(!Array.isArray(v)||v.length>24||v.some(r=>!r||!['read','write','vocab','grit'].includes(r.stat)||!Number.isInteger(r.at)||r.at<1||r.at>1e6||!K.test(r.species||''))))throw new Error('스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.');
       if(a.key==='streak_rewards'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length>10||Object.entries(v).some(([k,x])=>!K.test(k)||!x||!Number.isInteger(x.days)||x.days<2||x.days>60||!['evo','legend'].includes(x.stone))))throw new Error('연속 보상 설정이 올바르지 않습니다. 연속 일수는 2~60일입니다.');
-      if(a.key==='battle'){const ok=['first_xp','rewin_xp','gate_xp','gate_rewin_xp','shard_first','shard_rewin','shard_gate','shard_gate_rewin','shards_per_stone','over_ratio','streak','hearts','hp','gate_hp','pool','gate_q','combo','advance_act'],pos=['shards_per_stone','hearts','hp','gate_hp','pool','gate_q','combo'];
+      if(a.key==='battle'){const ok=['first_xp','rewin_xp','gate_xp','gate_rewin_xp','shard_first','shard_rewin','shard_gate','shard_gate_rewin','shards_per_stone','over_ratio','streak','hearts','hp','gate_hp','pool','gate_q','combo','advance_act','dmg_base','dmg_lv_div','dmg_lv_max','dmg_elite','dmg_legend','crit_per','crit_max','mix_rev','mix_listen'],pos=['shards_per_stone','hearts','hp','gate_hp','pool','gate_q','combo','dmg_base','dmg_lv_div','crit_per'];
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!ok.includes(k)||(k==='streak'?(!Array.isArray(x)||x.length>6||x.some(e=>!e||!Number.isInteger(e.days)||e.days<1||e.days>999||typeof e.mult!=='number'||e.mult<1||e.mult>5)):k==='advance_act'?!/^[a-z0-9_]{1,24}$/.test(x):k==='over_ratio'?(typeof x!=='number'||x<0||x>1):(!Number.isInteger(x)||x<(pos.includes(k)?1:0)||x>10000))))throw new Error('단어 배틀 설정이 올바르지 않습니다.')}
       if(a.key==='evolve_bonus'&&(!Array.isArray(v)||v.length!==2||v.some(x=>!Number.isInteger(x)||x<0||x>10000)))throw new Error('진화 보너스는 0~10000 사이 정수여야 합니다.');
       if(a.key==='map_name_mode'&&!['nickname','masked','real','hidden'].includes(v))throw new Error('이름 표시 방식이 올바르지 않습니다.');
@@ -586,7 +586,7 @@ const Demo={
     update_teacher(a){this.T();if(!this.me().is_admin)throw new Error('선생님 계정은 원장 계정에서만 바꿀 수 있습니다.');const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='teacher');if(!p)throw new Error('우리 학원 선생님 계정만 바꿀 수 있습니다.');const nm=String(a.name||'').trim(),pw=String(a.pw||'');
       if(!nm&&!pw)throw new Error('바꿀 이름이나 비밀번호를 입력해 주세요.');if(pw&&pw.length<6)throw new Error('비밀번호는 6자 이상이어야 합니다.');if(nm)p.display_name=nm.slice(0,20)},
     // ---- 단어 배틀 ----
-    battle_start(a){const p=this.stu();if(!p.active_monster)throw new Error('먼저 몬스터를 골라 주세요.');const pos=this.st.wordPos.find(x=>x.student_id===p.id);if(!pos)throw new Error('선생님이 아직 단어장 위치를 정하지 않았습니다.');
+    battle_start(a){const p=this.stu(),mo=this.st.monsters.find(x=>x.id===p.active_monster&&x.hatched);if(!mo)throw new Error('먼저 몬스터를 골라 주세요.');const pos=this.st.wordPos.find(x=>x.student_id===p.id);if(!pos)throw new Error('선생님이 아직 단어장 위치를 정하지 않았습니다.');
       const d=today();if(!this.dayOk(p.id,d))throw new Error('오늘 "다 했어요"를 하나 남기면 단어 동굴이 열려요.');const c=this.bCfg(),bk=a.book,un=a.unit,g=!!a.gate;
       if(bk==null||un==null||bk>pos.book||(bk===pos.book&&un>pos.unit))throw new Error('아직 열리지 않은 Unit입니다.');
       let us=[un];if(g){if(un%5)throw new Error('수문장은 5 Unit마다 있습니다.');us=[un-4,un-3,un-2,un-1,un];const has=[...new Set(this.st.words.filter(w=>w.book===bk&&us.includes(w.unit)).map(w=>w.unit))];if(has.some(u=>!this.wonUnit(p.id,bk,u,'unit')))throw new Error('수문장은 5개 Unit을 모두 한 번씩 이겨야 열립니다.')}
@@ -595,15 +595,17 @@ const Demo={
       const miss=k=>(this.st.misses.find(m=>m.student_id===p.id&&m.k===k)||{}).misses||0;
       const pool=shuf(grp(this.st.words.filter(w=>w.book===bk&&us.includes(w.unit)))).sort((x,y)=>(miss(y.k)>0)-(miss(x.k)>0)).slice(0,g?c.gate_q:c.pool);
       if(!pool.length)throw new Error('이 Unit에는 아직 단어가 없습니다.');const all=grp(this.st.words.filter(w=>w.book===bk));
-      const items=pool.map((it,i)=>({k:it.k,en:it.en,ko:it.ko,t:g&&i%2===1?'spell':'mc',o:shuf([...shuf(all.filter(x=>x.k!==it.k&&x.ko!==it.ko)).sort((x,y)=>y.near-x.near).slice(0,3).map(x=>x.ko),it.ko])}));
-      const hp=g?c.gate_hp:c.hp,b={id:uuid(),student_id:p.id,day:d,book:bk,unit:un,kind:g?'gate':'unit',items,queue:items.map((_,i)=>i),qn:1,hearts:c.hearts,hearts_max:c.hearts,hp,hp_max:hp,combo:0,status:'playing',revoked:false,rewarded:false,first_win:false,xp:0,shards:0,mult:1,created_at:new Date().toISOString()};
+      const items=pool.map((it,i)=>{const ds=shuf(all.filter(x=>x.k!==it.k&&x.ko!==it.ko)).sort((x,y)=>y.near-x.near).slice(0,3),rnd=Math.random()*100;
+        return{k:it.k,en:it.en,ko:it.ko,t:g&&i%2===1?'spell':rnd<c.mix_rev?'rev':rnd<c.mix_rev+c.mix_listen?'listen':'mc',o:shuf([...ds.map(x=>x.ko),it.ko]),oe:shuf([...ds.map(x=>x.en),it.en])}});
+      const power=c.dmg_base+Math.min(c.dmg_lv_max,Math.floor(mo.level/Math.max(1,c.dmg_lv_div)))+(mo.stage===3?c.dmg_legend:mo.stage===2?c.dmg_elite:0),crit=Math.min(c.crit_max,(this.statValues(p.id).vocab||0)/Math.max(1,c.crit_per))/100;
+      const hp=g?c.gate_hp:c.hp,b={id:uuid(),student_id:p.id,day:d,book:bk,unit:un,kind:g?'gate':'unit',items,queue:items.map((_,i)=>i),qn:1,hearts:c.hearts,hearts_max:c.hearts,hp,hp_max:hp,power,crit,combo:0,status:'playing',revoked:false,rewarded:false,first_win:false,xp:0,shards:0,mult:1,created_at:new Date().toISOString()};
       this.st.battles.push(b);return this.bState(b)},
     battle_answer(a){const p=this.stu(),b=this.st.battles.find(x=>x.id===a.battle&&x.student_id===p.id);if(!b)throw new Error('배틀을 찾을 수 없습니다.');if(b.status!=='playing')throw new Error('이미 끝난 배틀입니다.');if(a.n!==b.qn)throw new Error('이미 답한 문제입니다.');
-      const c=this.bCfg(),cur=b.queue[0],it=b.items[cur],ok=it.t==='spell'?String(a.answer||'').trim().toLowerCase()===it.en.trim().toLowerCase():String(a.answer??'')===it.ko;let dmg=0;
-      if(ok){b.combo++;dmg=b.combo%Math.max(1,c.combo)===0?2:1;b.hp=Math.max(0,b.hp-dmg);b.queue.shift();const m=this.st.misses.find(x=>x.student_id===p.id&&x.k===it.k);if(m)m.misses=Math.max(0,m.misses-1)}
+      const c=this.bCfg(),cur=b.queue[0],it=b.items[cur],en=it.t==='spell'||it.t==='rev',ok=en?String(a.answer||'').trim().toLowerCase()===it.en.trim().toLowerCase():String(a.answer??'')===it.ko;let dmg=0,crit=false;
+      if(ok){b.combo++;crit=Math.random()<b.crit;dmg=Math.round(b.power*(b.combo%Math.max(1,c.combo)===0?2:1)*(crit?1.5:1));b.hp=Math.max(0,b.hp-dmg);b.queue.shift();const m=this.st.misses.find(x=>x.student_id===p.id&&x.k===it.k);if(m)m.misses=Math.max(0,m.misses-1)}
       else{b.hearts--;b.combo=0;b.queue.shift();b.queue.push(cur);let m=this.st.misses.find(x=>x.student_id===p.id&&x.k===it.k);if(!m){m={student_id:p.id,k:it.k,misses:0};this.st.misses.push(m)}m.misses++}
       if(!b.queue.length)b.queue=b.items.map((_,i)=>i);b.qn++;if(b.hp<=0)b.status='won';else if(b.hearts<=0)b.status='lost';
-      const reward=b.status==='won'?this.bReward(b):null;return{...this.bState(b),correct:ok,dmg,answer:it.t==='spell'?it.en:it.ko,reward}},
+      const reward=b.status==='won'?this.bReward(b):null;return{...this.bState(b),correct:ok,dmg,crit,word:it.en,answer:en?it.en:it.ko,reward}},
     cave(){const p=this.stu(),c=this.bCfg(),d=today(),streak=this.bStreak(p.id,d),pos=this.st.wordPos.find(x=>x.student_id===p.id);let books=[];
       if(pos){const by={};for(const u of this.units()){if(u.book>pos.book)continue;(by[u.book]=by[u.book]||[]).push({unit:u.unit,words:u.n,won:this.wonUnit(p.id,u.book,u.unit,'unit'),gate_won:this.wonUnit(p.id,u.book,u.unit,'gate'),locked:u.book===pos.book&&u.unit>pos.unit})}
         books=Object.keys(by).map(Number).sort((a,b)=>a-b).map(k=>({book:k,units:by[k]}))}
@@ -1003,12 +1005,13 @@ function viewBattle(){const b=UI.bt,fb=UI.btFb,m=myActive(),sp=m&&spOf(m.species
   const top=`<section class="bt-top"><span class="tiny" style="letter-spacing:.14em;color:#E8A93A">${gate?'수문장 · Unit '+(b.unit-4)+'–'+b.unit:b.book+'권 · Unit '+b.unit}</span>${monsterSVG(wild,gate?3:2)}<b>${gate?'동굴 수문장 ':'야생 '}${esc(wild.name)}</b>
     <div class="hpbar"><i style="width:${Math.round(b.hp/b.hp_max*100)}%"></i></div><span class="tiny num">체력 ${b.hp} / ${b.hp_max}</span></section>`;
   let mid='';
-  if(b.status==='playing'&&!fb&&b.q){const q=b.q;mid=`<section class="card"><div class="bt-q"><p class="tiny muted">${q.t==='spell'?'뜻을 보고 영어로 쓰세요':'이 단어의 뜻은?'}</p><div class="pr">${esc(q.prompt)}${q.t==='spell'?'':` <button class="btn sm g" data-act="btSay" aria-label="발음 듣기" style="vertical-align:middle">🔊</button>`}</div></div>
+  const QL={mc:'이 단어의 뜻은?',listen:'잘 듣고 뜻을 고르세요',rev:'이 뜻의 영어 단어는?',spell:'뜻을 보고 영어로 쓰세요'};
+  if(b.status==='playing'&&!fb&&b.q){const q=b.q;mid=`<section class="card"><div class="bt-q"><p class="tiny muted">${QL[q.t]||''}</p>${q.t==='listen'?`<button class="btn p" data-act="btSay" style="font-size:22px;padding:14px 26px">🔊 다시 듣기</button>`:`<div class="pr">${esc(q.prompt)}${q.t==='mc'?` <button class="btn sm g" data-act="btSay" aria-label="발음 듣기" style="vertical-align:middle">🔊</button>`:''}</div>`}</div>
       ${q.t==='spell'?`<form id="fSpell" class="row"><input class="inp" id="spIn" autocomplete="off" autocapitalize="none" spellcheck="false" style="flex:1;font-size:18px" placeholder="영어 단어" required><button class="btn p">확인</button></form>`
         :`<div class="opts">${q.options.map((o,i)=>`<button class="opt" data-act="btAns" data-i="${i}">${esc(o)}</button>`).join('')}</div>`}</section>`}
-  else if(fb){const q=fb.q;mid=`<section class="card stack"><div class="bt-q"><div class="pr" style="font-size:24px">${esc(q.prompt)}</div></div>
+  else if(fb){const q=fb.q;mid=`<section class="card stack"><div class="bt-q"><div class="pr" style="font-size:24px">${esc(q.t==='listen'?fb.word:q.prompt)}</div>${q.t==='listen'?'<p class="tiny muted">들려준 단어</p>':''}</div>
       ${q.t==='spell'?'':`<div class="opts">${q.options.map(o=>`<div class="opt ${o===fb.answer?'ok':o===fb.chosen&&!fb.correct?'no':''}" style="cursor:default">${esc(o)}</div>`).join('')}</div>`}
-      <div class="fb ${fb.correct?'ok':'no'}"><button class="btn sm g" data-act="btSay" data-w="${esc(q.t==='spell'?fb.answer:q.prompt)}" aria-label="발음 듣기" style="float:right;margin:-4px -4px 0 6px">🔊</button>${fb.correct?`정답! 몬스터에게 -${fb.dmg}${fb.dmg>1?' 🔥 연속 보너스':''}`:`아쉬워요. 정답: ${esc(fb.answer)}${q.t==='spell'&&fb.chosen?` (내 답: ${esc(fb.chosen)})`:''}`}</div>
+      <div class="fb ${fb.correct?'ok':'no'}"><button class="btn sm g" data-act="btSay" data-w="${esc(fb.word||'')}" aria-label="발음 듣기" style="float:right;margin:-4px -4px 0 6px">🔊</button>${fb.correct?`정답! -${fb.dmg}${fb.crit?' 💥 치명타!':''}${fb.combo&&fb.combo%5===0?' 🔥 연속 보너스':''}`:`아쉬워요. 정답: ${esc(fb.answer)}${q.t==='spell'&&fb.chosen?` (내 답: ${esc(fb.chosen)})`:''}`}</div>
       ${b.status==='playing'?'<button class="btn p" data-act="btNext">다음 문제 →</button>':''}</section>`}
   if(b.status!=='playing'){const r=b.reward;mid+=b.status==='won'?`<section class="card stack" style="text-align:center"><h2 style="font-size:24px">🎉 승리!</h2>
       ${r&&!r.void?`<p><b class="num">+${r.xp} XP</b>${r.mult>1?` <span class="tiny muted">연속 ${r.streak}일 ×${Number(r.mult).toFixed(1)}</span>`:''}${r.raw>r.xp?` <span class="tiny muted">(이번 주 수업 XP를 넘은 부분은 1/4)</span>`:''}</p>
@@ -1016,7 +1019,7 @@ function viewBattle(){const b=UI.bt,fb=UI.btFb,m=myActive(),sp=m&&spOf(m.species
        ${r.first?'<p class="tiny muted">이 '+(gate?'수문장':'Unit')+' 첫 승리 · 복습 완료!</p>':r.limited?'<p class="tiny muted">오늘 이 '+(gate?'수문장':'Unit')+' 보상은 이미 받았어요. 내일 다시 받을 수 있어요.</p>':''}`:'<p class="tiny muted">오늘 활동이 확인되지 않아 보상이 없어요.</p>'}
       <div class="row" style="justify-content:center"><button class="btn" data-act="btExit">동굴로</button><button class="btn p" data-act="btRetry">한 번 더</button></div></section>`
     :`<section class="card stack" style="text-align:center"><h2 style="font-size:22px">패배…</h2><p class="muted">괜찮아요! 다시 도전하면 틀린 단어가 먼저 나와요.</p><div class="row" style="justify-content:center"><button class="btn" data-act="btExit">동굴로</button><button class="btn p" data-act="btRetry">다시 도전</button></div></section>`}
-  const bot=`<section class="card bt-me">${sp?monsterSVG(sp,m.stage):''}<div style="flex:1"><b>${esc((m&&m.nickname)||(sp&&sp.name)||'')}</b><div class="hearts" aria-label="하트 ${b.hearts}개">${'♥'.repeat(Math.max(0,b.hearts))}<span style="color:#D9DDEE">${'♥'.repeat(Math.max(0,b.hearts_max-b.hearts))}</span></div></div><span class="pill">${b.combo?`🔥 ${b.combo}연속`:'연속 0'}</span><button class="btn sm g" data-act="sndToggle" aria-label="소리 ${SND.on?'끄기':'켜기'}">${SND.on?'🔊':'🔇'}</button>${b.status==='playing'?'<button class="btn sm g" data-act="btExit">나가기</button>':''}</section>`;
+  const bot=`<section class="card bt-me">${sp?monsterSVG(sp,m.stage):''}<div style="flex:1"><b>${esc((m&&m.nickname)||(sp&&sp.name)||'')}</b> <span class="tiny muted">공격력 ${b.power}${b.crit?` · 치명타 ${b.crit}%`:''}</span><div class="hearts" aria-label="하트 ${b.hearts}개">${'♥'.repeat(Math.max(0,b.hearts))}<span style="color:#D9DDEE">${'♥'.repeat(Math.max(0,b.hearts_max-b.hearts))}</span></div></div><span class="pill">${b.combo?`🔥 ${b.combo}연속`:'연속 0'}</span><button class="btn sm g" data-act="sndToggle" aria-label="소리 ${SND.on?'끄기':'켜기'}">${SND.on?'🔊':'🔇'}</button>${b.status==='playing'?'<button class="btn sm g" data-act="btExit">나가기</button>':''}</section>`;
   return `<div class="stack">${top}${mid}${bot}</div>`}
 /* 소리: 효과음은 Web Audio로 직접 합성, 발음은 브라우저 음성(영어). 파일·외부 서비스 없음 */
 const SND={on:(()=>{try{return localStorage.getItem('mw_snd')!=='0'}catch(e){return true}})(),ctx:null};
@@ -1026,10 +1029,10 @@ function beep(kind){if(!SND.on)return;try{const AC=window.AudioContext||window.w
     g.gain.setValueAtTime(.0001,st);g.gain.exponentialRampToValueAtTime(kind==='no'?.08:.22,st+.02);g.gain.exponentialRampToValueAtTime(.0001,st+len);o.connect(g);g.connect(C.destination);o.start(st);o.stop(st+len+.05)}}catch(e){}}
 function say(t,delay=0){if(!SND.on||!t||!window.speechSynthesis)return;const go=()=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.85;
   const vs=speechSynthesis.getVoices(),v=vs.find(x=>/^en[-_]US/i.test(x.lang))||vs.find(x=>/^en/i.test(x.lang));if(v)u.voice=v;speechSynthesis.speak(u)}catch(e){}};delay?setTimeout(go,delay):go()}
-function sayQ(){const q=UI.bt&&UI.bt.q;if(q&&q.t!=='spell')say(q.prompt)}
+function sayQ(){const q=UI.bt&&UI.bt.q;if(!q)return;if(q.t==='listen')say(q.say);else if(q.t==='mc')say(q.prompt)}
 async function btSend(answer){if(UI.btBusy||!UI.bt||!UI.bt.q)return;UI.btBusy=true;const q=UI.bt.q;
-  try{const r=await api.rpc('battle_answer',{battle:UI.bt.id,n:q.n,answer});UI.btFb={correct:r.correct,answer:r.answer,chosen:answer,q,dmg:r.dmg};UI.bt=r;
-    beep(r.correct?'ok':'no');say(q.t==='spell'?r.answer:q.prompt,450);if(r.status==='won')setTimeout(()=>beep('win'),1300);
+  try{const r=await api.rpc('battle_answer',{battle:UI.bt.id,n:q.n,answer});UI.btFb={correct:r.correct,answer:r.answer,chosen:answer,q,dmg:r.dmg,crit:r.crit,combo:r.combo,word:r.word};UI.bt=r;
+    beep(r.correct?'ok':'no');if(q.t!=='listen')say(r.word,450);if(r.status==='won')setTimeout(()=>beep('win'),1300);
     if(r.status!=='playing')await refresh();else render()}
   catch(e){toast(e.message,true)}finally{UI.btBusy=false}}
 /* 단어장 파일 읽기: .xlsx(브라우저 기본 압축 해제), CSV, 붙여넣기(탭) — 외부 라이브러리 없음 */
@@ -1082,7 +1085,7 @@ const A={
   async btStart(d){try{UI.btLast={book:+d.b,unit:+d.u,gate:d.g==='1'};UI.bt=await api.rpc('battle_start',UI.btLast);UI.btFb=null;render();scrollTo(0,0);sayQ()}catch(e){toast(e.message,true)}},
   btAns(d){const q=UI.bt&&UI.bt.q;if(q&&q.options)btSend(q.options[+d.i])},
   btNext(){UI.btFb=null;render();const i=$('#spIn');if(i)i.focus();sayQ()},
-  btSay(d){say(d.w||(UI.bt&&UI.bt.q&&UI.bt.q.prompt))},
+  btSay(d){if(d.w)return say(d.w);const q=UI.bt&&UI.bt.q;if(q)say(q.t==='listen'?q.say:q.prompt)},
   sndToggle(){SND.on=!SND.on;try{localStorage.setItem('mw_snd',SND.on?'1':'0')}catch(e){}if(!SND.on&&window.speechSynthesis)try{speechSynthesis.cancel()}catch(e){}render()},
   async btExit(){UI.bt=null;UI.btFb=null;await A.caveOpen()},
   async btRetry(){const l=UI.btLast;if(l)await A.btStart({b:l.book,u:l.unit,g:l.gate?'1':'0'})},
