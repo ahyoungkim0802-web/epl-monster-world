@@ -244,6 +244,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--lav-deep)}
 .evo.done .txt{animation:none;opacity:1}
 .evo.done .pt,.evo.done .skip{display:none}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01s!important;animation-iteration-count:1!important;transition:none!important}}
+.a2hs{position:fixed;left:12px;right:12px;top:calc(12px + env(safe-area-inset-top,0px));z-index:60;max-width:520px;margin:0 auto;background:#fff;border:1px solid #D9DDEE;border-radius:16px;box-shadow:0 10px 30px #1f274733;padding:14px 16px;display:flex;flex-direction:column;gap:6px;color:#1F2747}.a2hs>span{font-size:14px;color:#4a5275;line-height:1.5}.a2hs .row{justify-content:flex-end;gap:8px;margin-top:4px}
 </style>
 </head>
 <body>
@@ -974,6 +975,26 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
   }catch(err){toast(err.message||'처리하지 못했습니다.',true)}finally{document.body.classList.remove('busy')}});
 // 취소된 지급 표시용: 원장(ledger)에서 revoke 행이 있는 건은 취소 버튼을 숨김
 const _load=o=>{const f=o.load.bind(o);o.load=async()=>{const w=await f();if(w&&w.ledger)w.ledgerRevoked=new Set(w.ledger.filter(l=>l.kind==='revoke').map(l=>l.mission_id||l.book_id));return w}};
+/* 홈 화면에 추가: 안드로이드는 버튼 한 번으로 설치, 아이폰은 화면 안내, 카카오톡 안에서 열면 기본 브라우저로 다시 엽니다. */
+const A2HS={ev:null};
+const a2hsStandalone=()=>{try{return matchMedia('(display-mode: standalone)').matches||navigator.standalone===true}catch(e){return false}};
+const a2hsOff=()=>{try{return localStorage.getItem('mw_a2hs_off')==='1'}catch(e){return false}};
+function a2hsShow(kind){if(a2hsOff()||a2hsStandalone()||document.getElementById('a2hs'))return;const ua=navigator.userAgent||'',d=document.createElement('div');d.id='a2hs';d.className='a2hs';d.setAttribute('role','dialog');
+  const body=kind==='android'?'<span>한 번 누르면 앱처럼 아이콘으로 바로 열 수 있어요.</span><div class="row"><button class="btn g" data-a2="off">닫기</button><button class="btn p" data-a2="install">홈 화면에 추가</button></div>'
+    :kind==='inapp'?'<span>이 앱 안에서는 추가가 안 돼요. 오른쪽 위(또는 아래) <b>⋯ 메뉴</b> → <b>다른 브라우저로 열기</b>를 눌러 주세요.</span><div class="row"><button class="btn g" data-a2="off">닫기</button></div>'
+    :`<span>${/CriOS/.test(ua)?'주소창 오른쪽 <b>공유 버튼</b>':'화면 아래 <b>공유 버튼</b>(네모에 위 화살표, 안 보이면 <b>⋯</b>부터)'} → <b>홈 화면에 추가</b> → <b>추가</b></span><div class="row"><button class="btn g" data-a2="off">닫기</button></div>`;
+  d.innerHTML='<b>📲 홈 화면에 MONSTER WORLD 추가</b>'+body;document.body.appendChild(d);
+  d.addEventListener('click',async e=>{const a=e.target.closest('[data-a2]');if(!a)return;
+    if(a.dataset.a2==='install'&&A2HS.ev){const ev=A2HS.ev;A2HS.ev=null;ev.prompt();try{const r=await ev.userChoice;if(r&&r.outcome==='accepted'){d.remove();toast('홈 화면에 추가했어요.')}}catch(_){}}
+    else{try{localStorage.setItem('mw_a2hs_off','1')}catch(_){}d.remove()}})}
+(function(){try{const ua=navigator.userAgent||'';if(a2hsStandalone())return;
+  if(/KAKAOTALK/i.test(ua)&&!sessionStorage.getItem('mw_kakao_out')){sessionStorage.setItem('mw_kakao_out','1');location.href='kakaotalk://web/openExternal?url='+encodeURIComponent(location.href);setTimeout(()=>a2hsShow('inapp'),1500);return}
+  if(/KAKAOTALK|NAVER\(inapp|Instagram|FBAN|FBAV|Line\/|DaumApps/i.test(ua)){setTimeout(()=>a2hsShow('inapp'),1200);return}
+  if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
+  addEventListener('beforeinstallprompt',e=>{e.preventDefault();A2HS.ev=e;a2hsShow('android')});
+  addEventListener('appinstalled',()=>{const d=document.getElementById('a2hs');if(d)d.remove()});
+  if(/iPhone|iPad|iPod/.test(ua))setTimeout(()=>a2hsShow('ios'),1200);
+}catch(e){}})();
 (async()=>{api=DEMO?Demo:Sup;_load(api);
   try{await api.init();if(await api.session())await refresh();else render()}
   catch(e){$('#app').innerHTML=`<div class="login"><div class="card stack"><h3>연결하지 못했습니다</h3><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">다시 시도</button></div></div>`}
