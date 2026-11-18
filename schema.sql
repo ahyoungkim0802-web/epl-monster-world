@@ -1,6 +1,7 @@
 -- =====================================================================
 -- MONSTER WORLD · 데이터베이스 v2.2  (Supabase / PostgreSQL) — 여러 학원용
 -- v2.2: 칭찬모아 기준(출석·태도·AR·NELT 등, 차감 포함), 선생님이 활동 목록을 직접 편집, 1000 XP = 1레벨
+-- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
 -- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
@@ -221,6 +222,7 @@ begin
     "activity_labels": {"reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
     "activity_list": ["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
     "self_report_acts": ["vocab","textbook","bookwriting","bookquiz","homework"],
+    "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "reading_milestones": [{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
     if not exists (select 1 from mw_settings where academy_id is null and key = d.key) then
@@ -243,32 +245,36 @@ update mw_settings set value = '{"reading":"원서 읽기 완료","attend":"출�
 insert into mw_species(id, name, animal, concept, rarity, season, sort, art, forms) values
  ('flamy','FLAMY','불꽃 여우','용기와 도전','starter',null,1,
   '{"body":"#F2A65A","belly":"#FFF3DC","accent":"#E8743B","dark":"#B5522A","ears":"fox","tail":"fox","mark":"flame"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Flamy"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Flamy"},{"stage":3,"stage_name":"Master","form_name":"Master Flamy"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Flamy"},{"stage":2,"stage_name":"Elite","form_name":"Elite Flamy"},{"stage":3,"stage_name":"Legend","form_name":"Legend Flamy"}]'),
  ('lumi','LUMI','별빛 고양이','창의력과 지혜','starter',null,2,
   '{"body":"#B8A7E8","belly":"#F1ECFF","accent":"#7C63C9","dark":"#58439E","ears":"cat","tail":"cat","mark":"star"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Lumi"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Lumi"},{"stage":3,"stage_name":"Master","form_name":"Master Lumi"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Lumi"},{"stage":2,"stage_name":"Elite","form_name":"Elite Lumi"},{"stage":3,"stage_name":"Legend","form_name":"Legend Lumi"}]'),
  ('mochi','MOCHI','숲 토끼','꾸준함과 성장','starter',null,3,
   '{"body":"#B9E4D0","belly":"#F4FFF6","accent":"#6FBF8E","dark":"#3F8F63","ears":"bunny","tail":"puff","mark":"leaf"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Mochi"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Mochi"},{"stage":3,"stage_name":"Master","form_name":"Master Mochi"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Mochi"},{"stage":2,"stage_name":"Elite","form_name":"Elite Mochi"},{"stage":3,"stage_name":"Legend","form_name":"Legend Mochi"}]'),
  ('pebblo','PEBBLO','조약돌 곰','끈기와 집중','common',null,10,
   '{"body":"#C9BCA8","belly":"#F6F0E4","accent":"#8C7B64","dark":"#5F5242","ears":"round","tail":"puff","mark":"stone"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Pebblo"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Pebblo"},{"stage":3,"stage_name":"Master","form_name":"Master Pebblo"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Pebblo"},{"stage":2,"stage_name":"Elite","form_name":"Elite Pebblo"},{"stage":3,"stage_name":"Legend","form_name":"Legend Pebblo"}]'),
  ('nimbo','NIMBO','구름 양','상상과 여유','common',null,11,
   '{"body":"#DCE8F7","belly":"#FFFFFF","accent":"#8FB1DE","dark":"#5A7FB3","ears":"horn","tail":"puff","mark":"cloud"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Nimbo"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Nimbo"},{"stage":3,"stage_name":"Master","form_name":"Master Nimbo"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Nimbo"},{"stage":2,"stage_name":"Elite","form_name":"Elite Nimbo"},{"stage":3,"stage_name":"Legend","form_name":"Legend Nimbo"}]'),
  ('tiddle','TIDDLE','물방울 수달','호기심과 탐구','common',null,12,
   '{"body":"#8FCBE0","belly":"#EAF8FC","accent":"#3F96B8","dark":"#2B6F8C","ears":"round","tail":"drop","mark":"drop"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Tiddle"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Tiddle"},{"stage":3,"stage_name":"Master","form_name":"Master Tiddle"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Tiddle"},{"stage":2,"stage_name":"Elite","form_name":"Elite Tiddle"},{"stage":3,"stage_name":"Legend","form_name":"Legend Tiddle"}]'),
  ('quillo','QUILLO','깃펜 부엉이','글쓰기와 표현','rare',null,20,
   '{"body":"#4E5A85","belly":"#E9E4D4","accent":"#D9B25F","dark":"#28314B","ears":"owl","tail":"none","mark":"quill"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Quillo"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Quillo"},{"stage":3,"stage_name":"Master","form_name":"Master Quillo"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Quillo"},{"stage":2,"stage_name":"Elite","form_name":"Elite Quillo"},{"stage":3,"stage_name":"Legend","form_name":"Legend Quillo"}]'),
  ('aurorix','AURORIX','오로라 사슴','통찰과 품격','rare',null,21,
   '{"body":"#F5A995","belly":"#FFF1EA","accent":"#7FD1C2","dark":"#B86B58","ears":"antler","tail":"puff","mark":"star"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Aurorix"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Aurorix"},{"stage":3,"stage_name":"Master","form_name":"Master Aurorix"}]'),
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Aurorix"},{"stage":2,"stage_name":"Elite","form_name":"Elite Aurorix"},{"stage":3,"stage_name":"Legend","form_name":"Legend Aurorix"}]'),
  ('frostie','FROSTIE','눈꽃 여우새','겨울 시즌 한정','seasonal','winter',30,
   '{"body":"#EAF2FA","belly":"#FFFFFF","accent":"#9CC3E8","dark":"#6C93BD","ears":"cat","tail":"fox","mark":"snow"}',
-  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Frostie"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Frostie"},{"stage":3,"stage_name":"Master","form_name":"Master Frostie"}]')
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Frostie"},{"stage":2,"stage_name":"Elite","form_name":"Elite Frostie"},{"stage":3,"stage_name":"Legend","form_name":"Legend Frostie"}]')
 on conflict (id) do nothing;
+
+-- v2.3: 진화 단계 이름 변경 (Baby·Explorer·Master → Rookie·Elite·Legend). 이미지 주소 등 다른 값은 유지
+update mw_species set forms = replace(replace(replace(forms::text, '"Baby', '"Rookie'), '"Explorer', '"Elite'), '"Master', '"Legend')::jsonb
+ where forms::text like '%"Baby%' or forms::text like '%"Explorer%' or forms::text like '%"Master%';
 
 -- ---------- 3. 권한 (Row Level Security) ----------
 create or replace function mw_my_academy() returns uuid
@@ -571,6 +577,20 @@ begin
   return v_id;
 end $$;
 
+-- 마을 지도: 내 학원 활성 학생의 이름·레벨·대표 몬스터만 돌려줍니다(XP·기록 등 다른 정보는 공개하지 않음).
+-- 체험 모드 Demo.F.map 과 같은 규칙입니다.
+drop function if exists mw_map();
+create or replace function mw_map() returns table(student_id uuid, name text, level int, stage int, species_id text)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not (mw_student_ok() or mw_is_teacher()) then raise exception '승인된 계정이 아닙니다.'; end if;
+  return query
+  select p.id, p.display_name, coalesce(m.level, 1), coalesce(m.stage, 1), m.species_id
+    from mw_profiles p left join mw_monsters m on m.id = p.active_monster
+   where p.academy_id = mw_my_academy() and p.role = 'student' and p.active
+   order by coalesce(m.level, 1) desc, p.display_name;
+end $$;
+
 -- ---------- 7. 선생님용 함수 (모두 "내 학원" 안에서만 작동) ----------
 create or replace function mw_claim_teacher(p_code text, p_name text) returns void
 language plpgsql security definer set search_path = public as $$
@@ -777,7 +797,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -790,6 +810,13 @@ begin
        select 1 from jsonb_array_elements(p_value) e
         where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[a-z0-9_]{1,24}$')) then
     raise exception '활동 목록 형식이 올바르지 않습니다.'; end if;
+  if p_key = 'map_zones' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) not between 1 and 8 or exists (
+       select 1 from jsonb_array_elements(p_value) with ordinality z(v, i)
+        where jsonb_typeof(z.v) <> 'object' or jsonb_typeof(z.v->'from') <> 'number'
+           or length(coalesce(z.v->>'name', '')) not between 1 and 24 or length(coalesce(z.v->>'ko', '')) > 24
+           or (z.i = 1 and (z.v->>'from')::numeric <> 1)
+           or (z.i > 1 and (z.v->>'from')::numeric <= (p_value->(z.i::int - 2)->>'from')::numeric))) then
+    raise exception '마을 지도 설정이 올바르지 않습니다. 첫 마을은 Lv.1부터, 시작 레벨은 점점 커져야 합니다.'; end if;
   v_old := mw_setting(v_ac, p_key);
   update mw_settings set value = p_value, updated_by = auth.uid(), updated_at = now() where academy_id = v_ac and key = p_key;
   if not found then
