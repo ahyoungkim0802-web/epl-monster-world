@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.12: 영어 역량 단계 이름 Speaker → Creator (Reader·Builder·Writer·Creator·Author)
 -- v2.11: 책 종류별 1권 완료(독해·구문·문법·라이팅·단어책, 각 200 XP, 선생님 지급)를 추가하고, 학생 요청이던 "교재 1권 완료"를 대신함
 -- v2.10: 클래스카드 활동(학생 요청, 50 XP, 어휘) + 연속 보상(streak_rewards): 평일 7일 연속 승인 → 진화석 1개. 주말은 세지도 끊지도 않음
 -- v2.9: 원장(관리자) 계정. 선생님 계정은 원장만 보고 바꿀 수 있음. 학원마다 가장 먼저 가입한 선생님이 원장
@@ -225,7 +226,7 @@ begin
   for d in select * from jsonb_each('{
     "xp_per_level": 1000, "max_level": 50, "evolve_levels": [15,35], "evolve_bonus": [500,1000], "weekly_xp_goal": 800, "point_rate": 0,
     "point_name": "포인트",
-    "stages": ["Reader","Builder","Writer","Speaker","Author"],
+    "stages": ["Reader","Builder","Writer","Creator","Author"],
     "activity_xp": {"classcard":50,"book_reading":200,"book_syntax":200,"book_grammar":200,"book_writing":200,"book_vocab":200,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
     "activity_labels": {"classcard":"클래스카드 학습","book_reading":"독해책 1권 완료","book_syntax":"구문책 1권 완료","book_grammar":"문법책 1권 완료","book_writing":"라이팅책 1권 완료","book_vocab":"단어책 1권 완료","reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
     "activity_list": ["attend","late","good","bad","vocab","classcard","book_reading","book_syntax","book_grammar","book_writing","book_vocab","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
@@ -268,6 +269,15 @@ begin
     insert into mw_settings(academy_id, key, value) values (null, 'migr_books', 'true'::jsonb);
   end if;
 end $$;
+
+-- v2.12: 역량 단계 Speaker → Creator. 예전 기본값을 그대로 쓰는 설정과, 그 단계에 있던 학생만 바꿉니다.
+update mw_profiles p set epl_stage = 'Creator'
+ where p.epl_stage = 'Speaker'
+   and coalesce((select s.value from mw_settings s where s.academy_id = p.academy_id and s.key = 'stages'),
+                (select s.value from mw_settings s where s.academy_id is null and s.key = 'stages'))
+       = '["Reader","Builder","Writer","Speaker","Author"]'::jsonb;
+update mw_settings set value = '["Reader","Builder","Writer","Creator","Author"]'::jsonb
+ where key = 'stages' and value = '["Reader","Builder","Writer","Speaker","Author"]'::jsonb;
 
 -- v2.1 보충: 이미 있는 설정에 새 활동(북라이팅·북퀴즈)만 추가합니다. 학원이 바꾼 값은 그대로 둡니다.
 update mw_settings set value = '{"bookwriting":30,"bookquiz":30}'::jsonb || value

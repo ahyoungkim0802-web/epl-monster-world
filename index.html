@@ -380,7 +380,7 @@ const SPECIES_SEED=[
  ['frostie','FROSTIE','눈꽃 여우새','겨울 시즌 한정','seasonal','winter',{body:'#EAF2FA',belly:'#FFFFFF',accent:'#9CC3E8',dark:'#6C93BD',ears:'cat',tail:'fox',mark:'snow'}]
 ].map((r,i)=>({id:r[0],name:r[1],animal:r[2],concept:r[3],rarity:r[4],season:r[5],enabled:true,sort:i,art:r[6],
   forms:[1,2,3].map(s=>({stage:s,stage_name:STN[s],form_name:STN[s]+' '+r[1][0]+r[1].slice(1).toLowerCase()}))}));
-const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speaker','Author'],activity_labels:{},point_rate:0,xp_per_level:1000,max_level:50,evolve_levels:[15,35],evolve_bonus:[500,1000],weekly_xp_goal:800,
+const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Creator','Author'],activity_labels:{},point_rate:0,xp_per_level:1000,max_level:50,evolve_levels:[15,35],evolve_bonus:[500,1000],weekly_xp_goal:800,
   activity_xp:{"classcard":50,"book_reading":200,"book_syntax":200,"book_grammar":200,"book_writing":200,"book_vocab":200,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
   activity_list:["attend","late","good","bad","vocab","classcard","book_reading","book_syntax","book_grammar","book_writing","book_vocab","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
   self_report_acts:["vocab","classcard","bookwriting","bookquiz","homework"],
