@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.14: 담당 선생님 변경을 모든 선생님이 할 수 있게. 선생님 이름 목록(mw_teacher_names, 이름만)
 -- v2.13: 담당 선생님 변경(mw_set_teacher, 원장 전용)
 -- v2.12: 영어 역량 단계 이름 Speaker → Creator (Reader·Builder·Writer·Creator·Author)
 -- v2.11: 책 종류별 1권 완료(독해·구문·문법·라이팅·단어책, 각 200 XP, 선생님 지급)를 추가하고, 학생 요청이던 "교재 1권 완료"를 대신함
@@ -1143,17 +1144,25 @@ begin
   perform mw_log('update_teacher', null, jsonb_build_object('teacher', p_id, 'name', v_name is not null, 'pw', v_pw is not null));
 end $$;
 
--- 학생 담당 선생님 변경(원장 전용). p_teacher 가 null 이면 담당 없음
+-- 학생 담당 선생님 변경(우리 학원 선생님 누구나). p_teacher 가 null 이면 담당 없음
 create or replace function mw_set_teacher(p_student uuid, p_teacher uuid) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   perform mw_need_teacher();
-  if not mw_is_admin() then raise exception '담당 선생님은 원장 계정에서만 바꿀 수 있습니다.'; end if;
   perform mw_need_student(p_student);
   if p_teacher is not null and not exists (select 1 from mw_profiles where id = p_teacher and role = 'teacher' and active and academy_id = mw_my_academy()) then
     raise exception '우리 학원 선생님만 담당으로 지정할 수 있습니다.'; end if;
   update mw_profiles set teacher_id = p_teacher where id = p_student;
   perform mw_log('set_teacher', p_student, jsonb_build_object('teacher', p_teacher));
+end $$;
+
+-- 담당 지정용 선생님 이름 목록(우리 학원 활성 선생님의 id·이름만. 아이디 등 계정 정보는 원장만 봄)
+create or replace function mw_teacher_names() returns table(id uuid, name text)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform mw_need_teacher();
+  return query select p.id, coalesce(nullif(p.display_name, ''), '선생님') from mw_profiles p
+   where p.academy_id = mw_my_academy() and p.role = 'teacher' and p.active order by p.created_at;
 end $$;
 
 -- 학생별 요약(선생님 화면·XP 기준 분석용)
