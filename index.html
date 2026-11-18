@@ -298,7 +298,7 @@ const actList=set=>((set&&Array.isArray(set.activity_list))?set.activity_list:DE
 function buildAct(set){const lb=(set&&set.activity_labels)||{},keys=new Set([...Object.keys(ACT_BASE),...actList(set)]);ACT={};
   for(const k of keys){const l=lb[k]||ACT_DEF[k]||k;ACT[k]=[ACT_BASE[k]?ACT_BASE[k][0]:l.slice(0,2),l]}
   const L=actList(set);if(!L.includes(UI.qa))UI.qa=L[0]||'vocab'}
-const BADGES={evo_explorer:'Elite 진화',evo_master:'Legend 진화',lv10:'Lv.10 달성',lv25:'Lv.25 달성',lvmax:'최고 레벨 달성',first_hatch:'첫 몬스터 획득',reader10:'원서 10권',reader30:'원서 30권',reader50:'원서 50권',master_reader:'마스터 리더'};
+const BADGES={sticker10:'스티커 10개',sticker50:'스티커 50개',evo_explorer:'Elite 진화',evo_master:'Legend 진화',lv10:'Lv.10 달성',lv25:'Lv.25 달성',lvmax:'최고 레벨 달성',first_hatch:'첫 몬스터 획득',reader10:'원서 10권',reader30:'원서 30권',reader50:'원서 50권',master_reader:'마스터 리더'};
 const stg=()=>(W&&W.set&&Array.isArray(W.set.stages)?W.set.stages:[]);const PN=()=>esc((W&&W.set&&W.set.point_name)||'포인트');
 const ACT_DEF=Object.fromEntries(Object.entries(ACT_BASE).map(([k,v])=>[k,v[1]]));
 const acCode=()=>{try{return (new URLSearchParams(location.search).get('a')||localStorage.getItem('mw_academy')||'').toLowerCase()}catch(e){return ''}};
@@ -421,6 +421,7 @@ const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Creat
   map_zones:[{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
   activity_stones:{ar:'evo',nelt:'legend'},
   streak_rewards:{classcard:{days:7,stone:'evo'}},
+  home_visit:true,
   coins:{"activity":5,"battle_first":10,"battle_rewin":2,"gate_first":30,"streak":20,"evo_elite":50,"evo_legend":100},
   battle:{first_xp:30,rewin_xp:5,gate_xp:100,gate_rewin_xp:5,shard_first:5,shard_rewin:1,shard_gate:20,shard_gate_rewin:1,shards_per_stone:100,over_ratio:0.25,streak:[{days:3,mult:1.2},{days:7,mult:1.5},{days:30,mult:2}],hearts:3,hp:120,gate_hp:240,pool:10,gate_q:20,combo:5,advance_act:'vocab',dmg_base:10,dmg_lv_div:5,dmg_lv_max:10,dmg_elite:3,dmg_legend:6,crit_per:200,crit_max:25,mix_rev:25,mix_listen:25},
   activity_stats:{"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
@@ -433,7 +434,7 @@ const Demo={
     if(!this.st.words){this.st.words=DEMO_WORDS.map(([book,unit,no,en,ko])=>({book,unit,no,en,ko}));this.st.wordPos=[{student_id:'minjun',book:1,unit:3,start_book:1,start_unit:1},{student_id:'seoa',book:1,unit:1,start_book:1,start_unit:1},{student_id:'jiho',book:1,unit:5,start_book:1,start_unit:1}]}
     if(this.st.set.battle&&this.st.set.battle.hp===10&&this.st.set.battle.gate_hp===20)Object.assign(this.st.set.battle,{hp:120,gate_hp:240});this.st.wordPos=this.st.wordPos||[];this.st.battles=this.st.battles||[];this.st.misses=this.st.misses||[];
     if(!this.st.coins)this.st.coins=[{student_id:'minjun',amount:400,reason:'체험용 코인',ref:'demo',created_at:new Date().toISOString()},{student_id:'jiho',amount:900,reason:'체험용 코인',ref:'demo',created_at:new Date().toISOString()},{student_id:'seoa',amount:150,reason:'체험용 코인',ref:'demo',created_at:new Date().toISOString()}];
-    this.st.inv=this.st.inv||[];this.st.homes=this.st.homes||[];
+    this.st.inv=this.st.inv||[];this.st.homes=this.st.homes||[];this.st.stickers=this.st.stickers||[];for(const p of this.st.profiles)if(!p.visit_key)p.visit_key=uuid().replace(/-/g,'').slice(0,12);
     const D=JSON.parse(JSON.stringify(DEF_SET));this.st.set={...D,...this.st.set,activity_xp:{...D.activity_xp,...(this.st.set||{}).activity_xp}}},
   save(){try{localStorage.setItem(this.KEY,JSON.stringify(this.st))}catch(e){}},
   seed(){
@@ -507,6 +508,10 @@ const Demo={
   coinAdd(s,amt,reason,ref){if(!(amt>0))return;if(ref&&this.st.coins.some(c=>c.student_id===s&&c.ref===ref))return;this.st.coins.push({student_id:s,amount:amt,reason,ref,created_at:new Date().toISOString()})},
   coinRevoke(s,ref,reason){const c=this.st.coins.find(x=>x.student_id===s&&x.ref===ref&&x.amount>0);if(c&&!this.st.coins.some(x=>x.student_id===s&&x.ref===ref+':rv'))this.st.coins.push({student_id:s,amount:-c.amount,reason,ref:ref+':rv',created_at:new Date().toISOString()})},
   coinOnApprove(s,act,ref){const c=this.cCfg();this.coinAdd(s,c.activity,'활동 승인',ref);const i=this.streakInfo(s)[act];if(i)for(let k=1;k<=i.earned;k++)this.coinAdd(s,c.streak,'연속 '+i.days+'일 달성','st:'+act+':'+k)},
+  visitOk(){return this.st.set.home_visit!==false&&(this.st.set.map_name_mode||'nickname')!=='hidden'},
+  pubName(id){const p=this.st.profiles.find(x=>x.id===id),mode=this.st.set.map_name_mode||'nickname';if(!p)return '';const n=p.display_name;if(mode==='real')return n;if(mode==='masked')return n.length<=1?'*':n.length===2?n[0]+'*':n[0]+'*'.repeat(n.length-2)+n[n.length-1];if(mode==='hidden')return '친구';
+    const m=this.st.monsters.find(x=>x.id===p.active_monster),sp=m&&SPECIES_SEED.find(x=>x.id===m.species_id);return(m&&(m.nickname||'').trim())||(sp&&sp.name)||'새 모험가'},
+  stkCount(id){const o={};for(const x of this.st.stickers)if(x.to===id)o[x.kind]=(o[x.kind]||0)+1;return o},
   maxLv(s){return Math.max(1,...this.st.monsters.filter(m=>m.student_id===s&&m.hatched).map(m=>m.level))},
   // ---- 단어 배틀(서버 mw_battle_* 과 같은 규칙) ----
   bCfg(){return{...DEF_SET.battle,...(this.st.set.battle||{})}},
@@ -557,7 +562,7 @@ const Demo={
       const mask=n=>n.length<=1?'*':n.length===2?n[0]+'*':n[0]+'*'.repeat(n.length-2)+n[n.length-1];
       return this.st.profiles.filter(p=>p.role==='student'&&p.active).map(p=>{const m=this.st.monsters.find(x=>x.id===p.active_monster),self=T||p.id===me.id,sp=m&&SPECIES_SEED.find(x=>x.id===m.species_id);
         const name=self||mode==='real'?p.display_name:mode==='masked'?mask(p.display_name):mode==='hidden'?null:((m&&m.nickname||'').trim()||(sp&&sp.name)||'새 모험가');
-        return{student_id:self?p.id:null,name,level:m?m.level:1,stage:m?m.stage:1,species_id:m&&(self||mode!=='hidden')?m.species_id:null}})
+        return{student_id:self?p.id:null,name,level:m?m.level:1,stage:m?m.stage:1,species_id:m&&(self||mode!=='hidden')?m.species_id:null,vk:T||(p.id!==me.id&&this.visitOk())?p.visit_key:null}})
         .sort((a,b)=>b.level-a.level||a.name.localeCompare(b.name,'ko'))},
     request_book(a){const t=(a.title||'').trim().slice(0,120),k=this.key(t);if(k.length<2)throw new Error('책 제목을 입력해 주세요.');if(this.st.books.some(b=>b.student_id===this.uid&&b.title_key===k))throw new Error('이미 등록한 책입니다.');
       this.st.books.push({id:uuid(),student_id:this.uid,title:t,title_key:k,status:'requested',created_at:new Date().toISOString()})},
@@ -594,6 +599,7 @@ const Demo={
       if(a.key==='activity_stats'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!['read','write','vocab','grit'].includes(x))))throw new Error('활동별 스탯 설정이 올바르지 않습니다.');
       if(a.key==='stat_rewards'&&(!Array.isArray(v)||v.length>24||v.some(r=>!r||!['read','write','vocab','grit'].includes(r.stat)||!Number.isInteger(r.at)||r.at<1||r.at>1e6||!K.test(r.species||''))))throw new Error('스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.');
       if(a.key==='streak_rewards'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.keys(v).length>10||Object.entries(v).some(([k,x])=>!K.test(k)||!x||!Number.isInteger(x.days)||x.days<2||x.days>60||!['evo','legend'].includes(x.stone))))throw new Error('연속 보상 설정이 올바르지 않습니다. 연속 일수는 2~60일입니다.');
+      if(a.key==='home_visit'&&typeof v!=='boolean')throw new Error('집 방문 설정이 올바르지 않습니다.');
       if(a.key==='coins'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!['activity','battle_first','battle_rewin','gate_first','streak','evo_elite','evo_legend'].includes(k)||!Number.isInteger(x)||x<0||x>10000)))throw new Error('코인 설정이 올바르지 않습니다. 0~10000 사이 정수로 입력해 주세요.');
       if(a.key==='battle'){const ok=['first_xp','rewin_xp','gate_xp','gate_rewin_xp','shard_first','shard_rewin','shard_gate','shard_gate_rewin','shards_per_stone','over_ratio','streak','hearts','hp','gate_hp','pool','gate_q','combo','advance_act','dmg_base','dmg_lv_div','dmg_lv_max','dmg_elite','dmg_legend','crit_per','crit_max','mix_rev','mix_listen'],pos=['shards_per_stone','hearts','hp','gate_hp','pool','gate_q','combo','dmg_base','dmg_lv_div','crit_per'];
         if(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!ok.includes(k)||(k==='streak'?(!Array.isArray(x)||x.length>6||x.some(e=>!e||!Number.isInteger(e.days)||e.days<1||e.days>999||typeof e.mult!=='number'||e.mult<1||e.mult>5)):k==='advance_act'?!/^[a-z0-9_]{1,24}$/.test(x):k==='over_ratio'?(typeof x!=='number'||x<0||x>1):(!Number.isInteger(x)||x<(pos.includes(k)?1:0)||x>10000))))throw new Error('단어 배틀 설정이 올바르지 않습니다.')}
@@ -615,7 +621,7 @@ const Demo={
       const v=this.st.inv.find(x=>x.student_id===p.id&&x.item_id===it.id),has=v?v.qty:0;if((it.kind!=='furniture'&&(has>0||it.price===0))||has>=9)throw new Error('이미 가지고 있어요.');
       const bal=this.coinBal(p.id);if(bal<it.price)throw new Error(`코인이 부족해요. (${bal} / ${it.price})`);if(it.price>0)this.st.coins.push({student_id:p.id,amount:-it.price,reason:it.name+' 구매',ref:'buy:'+uuid(),created_at:new Date().toISOString()});
       if(v)v.qty++;else this.st.inv.push({student_id:p.id,item_id:it.id,qty:1});return{coins:this.coinBal(p.id)}},
-    home(){const p=this.stu(),h=this.st.homes.find(x=>x.student_id===p.id)||{};return{wall:h.wall||'wall_cream',floor:h.floor||'floor_wood',layout:JSON.parse(JSON.stringify(h.layout||[])),inventory:Object.fromEntries(this.st.inv.filter(v=>v.student_id===p.id).map(v=>[v.item_id,v.qty])),coins:this.coinBal(p.id)}},
+    home(){const p=this.stu(),h=this.st.homes.find(x=>x.student_id===p.id)||{};return{wall:h.wall||'wall_cream',floor:h.floor||'floor_wood',layout:JSON.parse(JSON.stringify(h.layout||[])),inventory:Object.fromEntries(this.st.inv.filter(v=>v.student_id===p.id).map(v=>[v.item_id,v.qty])),coins:this.coinBal(p.id),stickers:this.stkCount(p.id),today:this.st.stickers.filter(x=>x.to===p.id&&x.day===today()).slice().reverse().map(x=>({kind:x.kind,name:this.pubName(x.from)})),visit:this.visitOk()}},
     home_save(a){const p=this.stu(),own=id=>{const i=SHOP_SEED.find(x=>x.id===id);return i&&(i.price===0||this.st.inv.some(v=>v.student_id===p.id&&v.item_id===id))};
       if(!(own(a.wall)&&SHOP_SEED.find(x=>x.id===a.wall).kind==='wall'&&own(a.floor)&&SHOP_SEED.find(x=>x.id===a.floor).kind==='floor'))throw new Error('가지고 있는 벽지·바닥만 쓸 수 있어요.');
       if(!Array.isArray(a.layout)||a.layout.length>48)throw new Error('배치가 올바르지 않습니다.');const cnt={},pos=new Set();
@@ -625,6 +631,16 @@ const Demo={
       const h=this.st.homes.find(x=>x.student_id===p.id),v={student_id:p.id,wall:a.wall,floor:a.floor,layout:a.layout.map(e=>({i:e.i,x:+e.x,y:+e.y}))};if(h)Object.assign(h,v);else this.st.homes.push(v)},
     equip(a){const p=this.stu();if(a.item&&!this.st.inv.some(v=>v.student_id===p.id&&v.item_id===a.item&&(SHOP_SEED.find(i=>i.id===a.item)||{}).kind==='acc'))throw new Error('가지고 있는 액세서리만 씌울 수 있어요.');
       const m=this.st.monsters.find(x=>x.id===a.monster&&x.student_id===p.id&&x.hatched);if(!m)throw new Error('내 몬스터가 아닙니다.');m.acc=a.item||null},
+    home_of(a){const me=this.me();if(!me||!me.active)throw new Error('승인된 계정이 아닙니다.');const T=me.role==='teacher',t=this.st.profiles.find(x=>x.visit_key===a.key&&x.role==='student'&&x.active);if(!t)throw new Error('찾을 수 없는 집입니다.');
+      if(!T&&!this.visitOk())throw new Error('지금은 친구 집 방문이 꺼져 있어요.');const h=this.st.homes.find(x=>x.student_id===t.id)||{};
+      const ms=this.st.monsters.filter(m=>m.student_id===t.id&&m.hatched).sort((x,y)=>(y.id===t.active_monster)-(x.id===t.active_monster)||y.level-x.level).slice(0,6).map(m=>({species_id:m.species_id,stage:m.stage,acc:m.acc||null}));
+      return{name:T?t.display_name:this.pubName(t.id),mine:t.id===me.id,wall:h.wall||'wall_cream',floor:h.floor||'floor_wood',layout:JSON.parse(JSON.stringify(h.layout||[])),monsters:ms,stickers:this.stkCount(t.id),sent_today:this.st.stickers.some(x=>x.from===me.id&&x.to===t.id&&x.day===today())}},
+    sticker(a){const p=this.stu(),t=this.st.profiles.find(x=>x.visit_key===a.key&&x.role==='student'&&x.active);if(!t)throw new Error('찾을 수 없는 집입니다.');if(!this.visitOk())throw new Error('지금은 친구 집 방문이 꺼져 있어요.');
+      if(t.id===p.id)throw new Error('내 집에는 스티커를 보낼 수 없어요.');if(!STICKERS[a.kind])throw new Error('보낼 수 없는 스티커입니다.');const d=today();
+      if(this.st.stickers.some(x=>x.from===p.id&&x.to===t.id&&x.day===d))throw new Error('오늘은 이 친구에게 이미 스티커를 보냈어요.');this.st.stickers.push({from:p.id,to:t.id,kind:a.kind,day:d,created_at:new Date().toISOString()});
+      const n=this.st.stickers.filter(x=>x.to===t.id).length;if(n>=10)this.badge(t.id,'sticker10');if(n>=50)this.badge(t.id,'sticker50')},
+    stickers_of(a){this.T();const nm=id=>(this.st.profiles.find(x=>x.id===id)||{}).display_name||'';const L=this.st.stickers.slice().sort((x,y)=>y.created_at.localeCompare(x.created_at));
+      return{received:L.filter(x=>x.to===a.student).slice(0,20).map(x=>({kind:x.kind,name:nm(x.from),at:x.created_at})),given:L.filter(x=>x.from===a.student).slice(0,20).map(x=>({kind:x.kind,name:nm(x.to),at:x.created_at}))}},
     coins_of(a){const me=this.me();if(!me||!me.active||(me.role!=='teacher'&&a.student!==me.id))throw new Error('볼 수 없는 학생입니다.');const L=this.st.coins.filter(c=>c.student_id===a.student).slice().sort((x,y)=>y.created_at.localeCompare(x.created_at));
       return{coins:this.coinBal(a.student),log:L.slice(0,20).map(c=>({amount:c.amount,reason:c.reason,at:c.created_at}))}},
     // ---- 단어 배틀 ----
@@ -950,6 +966,7 @@ function viewTeacher(){
       <h3 style="margin:6px 0 0">마을 지도 <small>레벨 구간별 지역 이름</small></h3>
       <div class="tw"><table><thead><tr><th>시작 레벨</th><th>지역 이름</th><th>한글 이름</th></tr></thead><tbody id="zoneRows">${mapZones().map((z,i)=>`<tr><td><input class="inp zf num" type="number" min="1" max="100" value="${z.from}" ${i===0?'readonly':''} aria-label="시작 레벨" style="width:80px"></td><td><input class="inp zn" maxlength="24" value="${esc(z.name)}" aria-label="지역 이름"></td><td><input class="inp zk" maxlength="24" value="${esc(z.ko||'')}" aria-label="한글 이름"></td></tr>`).join('')}</tbody></table></div>
       <label class="field">학생 화면의 이름 표시<select id="sMapName">${[['nickname','몬스터 별명 (추천)'],['masked','가린 이름 (예: 김*준)'],['real','실명'],['hidden','나만 보기 (다른 학생은 이름 없이 점으로)']].map(([v,t])=>`<option value="${v}" ${(s.map_name_mode||'nickname')===v?'selected':''}>${t}</option>`).join('')}</select></label>
+      <label class="row" style="gap:8px;align-items:center"><input type="checkbox" id="sVisit" ${s.home_visit!==false?'checked':''}> <span>친구 집 방문·스티커 켜기 <span class="tiny muted">(이름은 위 표시 방식을 따르고, '나만 보기'면 꺼집니다)</span></span></label>
       <p class="tiny muted">선생님 화면에는 항상 실명이 보입니다. 학생 화면에 실명을 보이려면 학부모 동의를 받아 두세요.</p>
       <h3 style="margin:6px 0 0">독서 보상 기준 (권수)</h3><div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">${s.reading_milestones.map((m,i)=>`<label class="field">${m.id==='master_reader'?'마스터 리더 칭호':{egg:'새 몬스터 알',rare_egg:'희귀 몬스터 알',badge:'특별 배지'}[m.reward]}<input id="sm_${i}" type="number" min="1" value="${m.books}"></label>`).join('')}</div>
       <h3 style="margin:6px 0 0">우리 학원 용어</h3>
@@ -986,7 +1003,7 @@ const zoneOf=(lv,Z)=>{let k=0;Z.forEach((z,j)=>{if(lv>=z.from)k=j});return k};
 function mapPt(t){const P=MAP_P,u=Math.max(0,Math.min(1,t))*(P.length-1),i=Math.min(P.length-2,Math.floor(u)),f=u-i;return[P[i][0]+(P[i+1][0]-P[i][0])*f,P[i][1]+(P[i+1][1]-P[i][1])*f]}
 function lvT(lv,Z){const n=Z.length,i=zoneOf(lv,Z),a=Z[i].from,b=i+1<n?Z[i+1].from:((W.set&&W.set.max_level)||50)+1;return(i+Math.max(0,Math.min(.92,(lv-a)/Math.max(1,b-a))))/n}
 function mapMark(r,x,y,me){if(r.name==null&&!me)return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#FFFDF6" stroke="#28314B66" stroke-width="2"/>`;const sp=r.species_id?spOf(r.species_id):null,sz=me?42:28,inner=(sp?monsterSVG(sp,r.stage):eggSVG(null)).replace('<svg ',`<svg x="${(x-sz/2).toFixed(1)}" y="${(y-sz/2-1).toFixed(1)}" width="${sz}" height="${sz}" `);
-  return `<g class="mk" data-act="mapWho" data-n="${esc(r.name)} · Lv.${r.level}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sz/2+3}" fill="${me?'#FFD27A':'#FFFDF6'}" stroke="${me?'#A8781F':'#28314B66'}" stroke-width="2"/>${inner}`+
+  return `<g class="mk" data-act="mapWho" data-n="${esc(r.name)} · Lv.${r.level}" data-vk="${esc(r.vk||'')}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sz/2+3}" fill="${me?'#FFD27A':'#FFFDF6'}" stroke="${me?'#A8781F':'#28314B66'}" stroke-width="2"/>${inner}`+
     (me?`<rect x="${(x-30).toFixed(1)}" y="${(y+sz/2+5).toFixed(1)}" width="60" height="17" rx="8.5" fill="#28314B"/><text x="${x.toFixed(1)}" y="${(y+sz/2+17).toFixed(1)}" text-anchor="middle" class="mkme">나 · Lv.${r.level}</text>`
        :`<text x="${x.toFixed(1)}" y="${(y+sz/2+13).toFixed(1)}" text-anchor="middle" class="mkn">${esc(r.name)}</text>`)+`</g>`}
 async function loadMap(){try{UI.map=await api.rpc('map')||[]}catch(e){UI.map=[];toast(e.message,true)}}
@@ -1014,7 +1031,7 @@ function readActs(){const ax={},lb={},list=[],self=[],stats={},stones={};for(con
 function ledgerTable(L,withName){if(!L.length)return '<div class="empty">내역이 없습니다.</div>';
   return `<div class="tw"><table><thead><tr><th>일시</th>${withName?'<th>학생</th>':''}<th>구분</th><th>내용</th><th class="r">XP</th><th></th></tr></thead><tbody>${L.map(l=>{const rev=l.kind==='grant'&&(l.mission_id||l.book_id)&&!W.ledgerRevoked?.has(l.mission_id||l.book_id);
     return `<tr><td class="num">${fmtD(l.created_at)}</td>${withName?`<td><b>${esc(stuName(l.student_id))}</b></td>`:''}<td><span class="pill ${l.kind==='grant'?'ok':l.kind==='revoke'?'no':'wait'}">${{grant:'지급',revoke:'취소',adjust:'정정',battle:'배틀',battle_revoke:'배틀 회수'}[l.kind]}</span></td><td>${esc(ACT[l.reason]?.[1]||l.reason)}</td><td class="r num"><b>${l.amount>0?'+':''}${l.amount}</b></td><td class="r">${rev?`<button class="btn sm d" data-act="revoke" data-m="${l.mission_id||''}" data-b="${l.book_id||''}">지급 취소</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`}
-async function openStudent(id){const p=W.profiles.find(x=>x.id===id);if(!p)return;let d,co=null;try{d=await api.loadStudent(id)}catch(e){return toast(e.message,true)}try{co=await api.rpc('coins_of',{student:id})}catch(e){}
+async function openStudent(id){const p=W.profiles.find(x=>x.id===id);if(!p)return;let d,co=null;try{d=await api.loadStudent(id)}catch(e){return toast(e.message,true)}try{co=await api.rpc('coins_of',{student:id})}catch(e){}let sk=null;try{sk=await api.rpc('stickers_of',{student:id})}catch(e){}
   const mons=W.monsters.filter(m=>m.student_id===id),nb=d.books.filter(b=>b.status==='approved').length;
   const revoked=new Set(d.ledger.filter(l=>l.kind==='revoke').map(l=>l.mission_id||l.book_id));W.ledgerRevoked=new Set([...(W.ledgerRevoked||[]),...revoked]);
   const giftable=W.species.filter(s=>s.rarity==='seasonal'&&!mons.some(m=>m.species_id===s.id));let st={},sn={};try{st=await api.rpc('stats',{student:id})||{}}catch(e){}try{sn=await api.rpc('stones',{student:id})||{}}catch(e){}
@@ -1025,6 +1042,7 @@ async function openStudent(id){const p=W.profiles.find(x=>x.id===id);if(!p)retur
    <form class="card stack" id="fAdjust" data-id="${id}"><h3>XP 정정 <small>대표 몬스터에 반영 · 사유 필수</small></h3><div class="row"><input class="inp" id="adAmt" type="number" style="width:110px" placeholder="±XP" required><input class="inp" id="adWhy" style="flex:1;min-width:160px" maxlength="200" placeholder="정정 사유" required><button class="btn">정정</button></div></form>
    <div class="card"><h3>최근 XP 내역</h3>${ledgerTable(d.ledger.slice(0,25),false)}</div>
    ${co?`<div class="card"><h3>🪙 코인 <small>${co.coins.toLocaleString()}</small></h3>${co.log.slice(0,6).map(c=>`<div class="mi"><div class="t"><span>${esc(c.reason)}</span><span class="tiny muted">${fmtD(c.at)}</span></div><b class="num" style="color:${c.amount<0?'#9B3424':'#1E6B50'}">${c.amount>0?'+':''}${c.amount}</b></div>`).join('')||'<p class="tiny muted">아직 코인 내역이 없습니다.</p>'}</div>`:''}
+   ${sk&&(sk.received.length||sk.given.length)?`<div class="card"><h3>스티커 <small>받은 ${sk.received.length} · 보낸 ${sk.given.length}</small></h3><p class="tiny">받음: ${sk.received.slice(0,8).map(x=>`${STICKERS[x.kind][0]} ${esc(x.name)}`).join(' · ')||'—'}</p><p class="tiny" style="margin-top:4px">보냄: ${sk.given.slice(0,8).map(x=>`${STICKERS[x.kind][0]} ${esc(x.name)}`).join(' · ')||'—'}</p></div>`:''}
    <div class="card stack"><h3>계정 관리</h3><div class="row"><label class="field" style="flex:1;margin:0">담당 선생님<select class="inp" id="stTeacher"><option value="">담당 없음</option>${(W.teachers||[]).map(t=>`<option value="${t.id}" ${p.teacher_id===t.id?'selected':''}>${esc(t.name)}${t.id===W.me.id?' (나)':''}</option>`).join('')}</select></label><button class="btn" data-act="setTeacher" data-id="${id}" style="align-self:flex-end">담당 변경</button></div><div class="row">${giftable.length?`<select class="inp" id="giftSp" style="flex:1;min-width:150px">${giftable.map(s=>`<option value="${s.id}">${s.name} (${RAR[s.rarity][0]})</option>`).join('')}</select><input class="inp" id="giftWhy" style="flex:2;min-width:160px" maxlength="40" placeholder="선물 사유 (예: 12월 원서 챌린지)"><button class="btn" data-act="gift" data-id="${id}">알 선물</button>`:'<span class="tiny muted">선물할 수 있는 시즌 한정 몬스터가 없습니다.</span>'}</div>
     <div class="row">${DEMO?'':`<input class="inp" id="rpPw" style="flex:1;min-width:150px" placeholder="새 비밀번호 (6자 이상)"><button class="btn" data-act="resetPw" data-id="${id}">비밀번호 재설정</button>`}<button class="btn d" data-act="activate" data-id="${id}" data-v="0">계정 비활성화</button></div><p class="tiny muted">아이디: ${esc(p.login_id)}</p></div></div>`);
 }
@@ -1118,6 +1136,7 @@ function viewWords(stu){const P=UI.wPrev,B=UI.wBooks||[],ws=id=>(W.wordStatus||[
    <section class="card"><h3>올린 단어장 <small>${B.length}권</small></h3>${B.length?`<div class="tw"><table><thead><tr><th>권</th><th class="r">Unit</th><th class="r">단어</th><th></th></tr></thead><tbody>${B.map(b=>`<tr><td><b>${b.book}권</b> <span class="tiny muted">지하 ${b.book}층</span></td><td class="r num">${b.units}</td><td class="r num">${b.words.toLocaleString()}</td><td class="r"><button class="btn sm d" data-act="wDel" data-b="${b.book}">삭제</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">아직 올린 단어장이 없습니다.</div>'}</section></div>
    <section class="card"><h3>학생별 현재 권 · Unit <small>단어시험을 승인하면 Unit +1</small></h3>${stu.length?`<div class="tw"><table><thead><tr><th>학생</th><th>권</th><th>Unit</th><th class="r">밀린 Unit</th><th></th></tr></thead><tbody>${stu.map((p,i)=>{const w=ws(p.id);return `<tr><td><b>${esc(p.display_name)}</b>${w.book?'':' <span class="tiny muted">미지정</span>'}</td><td><input class="inp num" id="wb_${i}" type="number" min="1" max="999" value="${w.book||''}" style="width:70px" aria-label="권"></td><td><input class="inp num" id="wu_${i}" type="number" min="1" max="999" value="${w.unit||''}" style="width:70px" aria-label="Unit"></td><td class="r">${w.backlog?`<span class="pill ${w.backlog>=3?'no':'wait'}">${w.backlog}개</span>`:'<span class="tiny muted">0</span>'}</td><td class="r"><button class="btn sm" data-act="wPos" data-id="${p.id}" data-i="${i}">저장</button></td></tr>`}).join('')}</tbody></table></div>`:'<div class="empty">학생이 없습니다.</div>'}
     <p class="tiny muted" style="margin-top:8px">처음 지정한 위치부터 지금 Unit 앞까지, 배틀에서 한 번도 이기지 않은 Unit이 "밀린 Unit"입니다.</p></section></div>`}
+const STICKERS={like:['👍','멋져요'],fire:['🔥','대단해'],star:['🌟','부러워'],cute:['😍','귀여워'],cheer:['💪','화이팅'],best:['🏆','최고']};
 /* 상점 그림(임시, 코드로 그림). 나중에 이미지로 바꿀 수 있음 */
 const ITEM_ART={
  bed:'<rect x="3" y="20" width="34" height="12" rx="2" fill="#8C6A4E"/><rect x="3" y="14" width="8" height="18" rx="2" fill="#6E5238"/><rect x="11" y="18" width="26" height="8" rx="2" fill="#7FB3E8"/><rect x="5" y="16" width="9" height="6" rx="3" fill="#fff"/><rect x="5" y="32" width="3" height="4" fill="#6E5238"/><rect x="32" y="32" width="3" height="4" fill="#6E5238"/>',
@@ -1160,15 +1179,25 @@ function accSVG(id,stage){const hy=[0,98,86,76][stage]||98,hr=[0,45,42,40][stage
 const accOn=(svg,acc,stage)=>acc?svg.replace(/<\/svg>\s*$/,accSVG(acc,stage)+'</svg>'):svg;
 const monSVG=m=>{const sp=spOf(m.species_id);return sp?accOn(monsterSVG(sp,m.stage),m.acc,m.stage):eggSVG(null)};
 /* ================= 내 집 · 상점 (코인 계산·구매·저장 검사는 서버 mw_shop/mw_buy/mw_home_save) ================= */
-async function loadHouse(){try{const[h,sh]=await Promise.all([api.rpc('home'),api.rpc('shop')]);UI.home=h;UI.shop=sh}catch(e){toast(e.message,true)}}
+async function loadHouse(){try{const[h,sh]=await Promise.all([api.rpc('home'),api.rpc('shop')]);UI.home=h;UI.shop=sh}catch(e){toast(e.message,true)}if(!UI.home)UI.home=null}
 function roomHTML(h,mons,edit){const L=edit?UI.hEdit.layout:h.layout,at={};for(const e of L)at[e.x+','+e.y]=e.i;let cells='';
   for(let y=0;y<6;y++)for(let x=0;x<8;x++){const i=at[x+','+y];cells+=edit?`<button class="cell" data-act="hCell" data-x="${x}" data-y="${y}" aria-label="${x+1}-${y+1} 칸">${i?itemSVG(i):''}</button>`:`<div class="cell">${i?itemSVG(i):''}</div>`}
   const w=edit?UI.hEdit.wall:h.wall,f=edit?UI.hEdit.floor:h.floor;
   return `<div class="room ${edit?'edit':''}"><div class="wall" style="background:${WALL_BG[w]||WALL_BG.wall_cream}"></div><div class="floor" style="background:${FLOOR_BG[f]||FLOOR_BG.floor_wood}"></div><div class="cells">${cells}</div><div class="mons">${mons.map(monSVG).join('')}</div></div>`}
 function viewHouse(){const H=UI.home,S=UI.shop,v=UI.hv||'home',mons=W.monsters.filter(m=>m.hatched).slice(0,6);
-  const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px">${[['home','내 집'],['shop','상점'],['edit','꾸미기']].map(([k,l])=>`<button class="ck ${v===k?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div><span class="coin">🪙 ${H?H.coins.toLocaleString():'…'}</span></div>`;
+  const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px">${[['home','내 집'],['shop','상점'],['edit','꾸미기'],...(H&&H.visit?[['friends','친구 집']]:[])].map(([k,l])=>`<button class="ck ${v===k?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div><span class="coin">🪙 ${H?H.coins.toLocaleString():'…'}</span></div>`;
   if(!H||!S)return `<div class="stack">${top}<div class="empty">불러오는 중…</div></div>`;
+  const stkLine=o=>Object.entries(STICKERS).filter(([k])=>o&&o[k]).map(([k,[e]])=>`<span class="pill">${e} ${o[k]}</span>`).join(' ');
+  if(v==='friends'){const F=(UI.map||[]).filter(r=>r.vk);return `<div class="stack">${top}<section class="card"><h3>친구 집 둘러보기 <small>${F.length}명</small></h3>
+      ${F.length?`<div class="stu">${F.map(r=>`<button class="st" data-act="visit" data-vk="${esc(r.vk)}">${r.species_id?monsterSVG(spOf(r.species_id),r.stage):eggSVG(null)}<span><b>${esc(r.name||'친구')}</b><span class="tiny muted">Lv.${r.level}</span><br><span class="tiny">🏠 집 구경하기 →</span></span></button>`).join('')}</div>`:'<div class="empty">아직 놀러 갈 친구가 없어요.</div>'}</section></div>`}
+  if(v==='visit'){const V=UI.visit;if(!V)return `<div class="stack">${top}<div class="empty">친구 집에 가는 중…</div></div>`;
+    return `<div class="stack">${top}<div class="row" style="justify-content:space-between"><button class="btn" data-act="hTab" data-v="friends">← 친구 목록</button><h2 style="font-size:19px">🏠 ${esc(V.name)}의 집</h2></div>
+      <section class="card" style="padding:10px">${roomHTML(V,V.monsters,false)}</section>
+      <section class="card stack"><h3>스티커 남기기 <small>친구마다 하루 1번</small></h3>
+        ${V.sent_today?'<div class="fb ok">오늘 이 친구에게 스티커를 보냈어요. 내일 또 놀러 와요!</div>':`<div class="chips">${Object.entries(STICKERS).map(([k,[e,l]])=>`<button class="ck" data-act="stk" data-k="${k}">${e} ${l}</button>`).join('')}</div>`}
+        <p class="tiny muted">이 집이 받은 스티커 ${stkLine(V.stickers)||'아직 없음'}</p></section></div>`}
   if(v==='home')return `<div class="stack">${top}<section class="card" style="padding:10px">${roomHTML(H,mons,false)}</section>
+    ${H.visit?`<section class="card"><h3>오늘 받은 스티커 <small>${(H.today||[]).length}개</small></h3>${(H.today||[]).length?`<div class="chips">${H.today.map(t=>`<span class="pill">${STICKERS[t.kind][0]} ${esc(t.name)} · ${STICKERS[t.kind][1]}</span>`).join('')}</div>`:'<p class="tiny muted">아직 없어요. 친구 집에 놀러 가서 먼저 스티커를 남겨 보세요!</p>'}${stkLine(H.stickers)?`<p class="tiny muted" style="margin-top:8px">지금까지 받은 스티커 ${stkLine(H.stickers)}</p>`:''}</section>`:''}
     <p class="tiny muted">공부하면 코인이 모여요: 활동 승인, 배틀 승리, 연속 기록, 진화. 상점에서 가구와 액세서리를 사서 집을 꾸며 보세요.</p></div>`;
   if(v==='edit'){const E=UI.hEdit,inv=H.inventory||{},used={};for(const e of E.layout)used[e.i]=(used[e.i]||0)+1;
     const fur=S.items.filter(i=>i.kind==='furniture'&&(inv[i.id]||0)>0),walls=S.items.filter(i=>i.kind==='wall'&&(i.owned>0)),floors=S.items.filter(i=>i.kind==='floor'&&(i.owned>0));
@@ -1214,7 +1243,7 @@ const A={
   wDel(d){modal(`<h2>${d.b}권 단어장 삭제 <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack"><p>${d.b}권의 단어를 모두 지웁니다. 학생의 배틀 기록은 남습니다.</p><button class="btn d" data-act="wDelDo" data-b="${d.b}">삭제</button></div>`)},
   async wDelDo(d){closeModal();try{const n=await api.rpc('word_delete_book',{book:+d.b});await loadWords();toast(`${n}개 단어를 지웠습니다.`);render()}catch(e){toast(e.message,true)}},
   async wPos(d){const b=Math.round(Number($('#wb_'+d.i).value)),u=Math.round(Number($('#wu_'+d.i).value));try{await api.rpc('set_word_pos',{student:d.id,book:b,unit:u});await loadWords();toast('현재 권·Unit을 저장했습니다.');render()}catch(e){toast(e.message,true)}},
-  async hTab(d){UI.hv=d.v;UI.hSel=null;if(d.v==='edit'&&UI.home)UI.hEdit={wall:UI.home.wall,floor:UI.home.floor,layout:JSON.parse(JSON.stringify(UI.home.layout||[]))};render()},
+  async hTab(d){UI.hv=d.v;UI.hSel=null;if(d.v==='friends'&&!UI.map)await loadMap();if(d.v==='edit'&&UI.home)UI.hEdit={wall:UI.home.wall,floor:UI.home.floor,layout:JSON.parse(JSON.stringify(UI.home.layout||[]))};render()},
   sCat(d){UI.sCat=d.v;render()},
   hPick(d){UI.hSel=UI.hSel===d.id?null:d.id;render()},
   hCell(d){const E=UI.hEdit,x=+d.x,y=+d.y,k=E.layout.findIndex(e=>e.x===x&&e.y===y);if(k>=0){E.layout.splice(k,1);return render()}
@@ -1228,7 +1257,7 @@ const A={
   async demoLogin(d){await api.login(d.id);await refresh()},
   demoReset(){Demo.seed();toast('예시 데이터를 처음 상태로 되돌렸습니다.');render()},
   loginMode(d){UI.loginMode=d.m;render()},
-  async tab(d){UI.tab=d.t;UI.caveOn=false;UI.bt=null;UI.btFb=null;if(d.t==='house'){UI.hv='home';await loadHouse()}if(d.t==='map')await loadMap();render();scrollTo(0,0)},async ttab(d){UI.ttab=d.t;if(d.t==='weekly')await loadWeekly();if(d.t==='map')await loadMap();if(d.t==='words')await loadWords();render()},
+  async tab(d){UI.tab=d.t;UI.caveOn=false;UI.bt=null;UI.btFb=null;if(d.t==='house'){UI.hv='home';await Promise.all([loadHouse(),loadMap()])}if(d.t==='map')await loadMap();render();scrollTo(0,0)},async ttab(d){UI.ttab=d.t;if(d.t==='weekly')await loadWeekly();if(d.t==='map')await loadMap();if(d.t==='words')await loadWords();render()},
   async wkMove(d){UI.wk=Math.min(0,UI.wk+Number(d.d));await loadWeekly();render()},
   settle(d){call('settle',{students:[d.id],start:ymd(wkStart()),done:d.v==='1'},d.v==='1'?'입력 완료로 표시했습니다.':'미입력으로 되돌렸습니다.')},
   settleAll(){const ids=UI.weekly.filter(r=>wkTarget(r)&&!r.done_at).map(r=>r.student_id);if(ids.length)call('settle',{students:ids,start:ymd(wkStart()),done:true},ids.length+'명을 입력 완료로 표시했습니다.')},
@@ -1252,7 +1281,9 @@ const A={
   // teacher
   async decideM(d){const ids=[...UI.selM];if(!ids.length)return toast('승인할 요청을 선택해 주세요.',true);const ok=d.ok==='1';const r=await call('decide_missions',{ids,approve:ok},r=>ok?`${r.done}건 승인 · XP 지급 완료`+(r.skipped?` (스타터 미선택 ${r.skipped}건 제외)`:''):`${r.done}건 반려`);if(r)UI.selM.clear(),render()},
   async decideB(d){const ids=[...UI.selB];if(!ids.length)return toast('승인할 독서 요청을 선택해 주세요.',true);const ok=d.ok==='1';const r=await call('decide_books',{ids,approve:ok,comp:null},r=>ok?`독서 ${r.done}권 승인`:`${r.done}건 반려`);if(r)UI.selB.clear(),render()},
-  mapWho(d){toast(d.n)},
+  mapWho(d){if(!d.vk||W.me.role!=='student')return toast(d.n);modal(`<h2>${esc(d.n)} <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack"><p class="muted">친구 집에 놀러 가 볼까요?</p><button class="btn p" data-act="visit" data-vk="${esc(d.vk)}">🏠 집 구경하기</button></div>`)},
+  async visit(d){closeModal();UI.tab='house';UI.hv='visit';UI.visit=null;UI.visitKey=d.vk;UI.caveOn=false;UI.bt=null;render();try{UI.visit=await api.rpc('home_of',{key:d.vk})}catch(e){toast(e.message,true);UI.hv='friends'}render();scrollTo(0,0)},
+  async stk(d){try{await api.rpc('sticker',{key:UI.visitKey,kind:d.k});beep('ok');UI.visit=await api.rpc('home_of',{key:UI.visitKey});toast(STICKERS[d.k][0]+' 스티커를 보냈어요!');render()}catch(e){toast(e.message,true)}},
   evoOpen(d){const m=W.monsters.find(x=>x.id===d.id);if(!m)return;const sp=spOf(m.species_id),o=evoOpts(m);if(!o.length)return toast('지금은 진화할 수 없습니다.',true);
     modal(`<h2>${esc(m.nickname||sp.name)} 진화 <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack"><div class="card"><div class="forms" style="grid-template-columns:1fr 1fr">${[m.stage,m.stage+1].map(s=>`<div>${monsterSVG(sp,s)}${STN[s]}</div>`).join('')}</div></div>
       ${evoBonus(m.stage+1)?`<p class="pill ok" style="align-self:center">진화하면 ${PN()} +${evoBonus(m.stage+1).toLocaleString()}</p>`:''}<p class="muted">사용할 돌을 고르세요. 진화는 되돌릴 수 없습니다.</p>${o.map(([u,t])=>`<button class="btn p" data-act="evoDo" data-id="${m.id}" data-u="${u}">${t}로 ${STN[m.stage+1]} 진화</button>`).join('')}</div>`)},
@@ -1299,7 +1330,7 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
         const sri=[...document.querySelectorAll('#srRows .sra')];var srs=(W.set.stat_rewards||[]).map((r,i)=>{const at=Number(sri[i]?sri[i].value:r.at);if(!Number.isInteger(at)||at<1||at>1e6)throw new Error('필요 스탯은 1 이상의 정수로 입력해 주세요.');return{...r,at}})}catch(err){return toast(err.message,true)}const{ax,lb,list,self,stats,stones}=A;const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
       document.body.classList.add('busy');const sg=$('#sStg').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8);
       const cur=k=>k==='stages'?stg():k==='activity_labels'?(W.set.activity_labels||{}):W.set[k];
-      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['evolve_bonus',eb],['streak_rewards',sk],['battle',btv],['coins',Object.fromEntries(Object.keys(DEF_SET.coins).map(k=>[k,Math.max(0,Math.round(Number($('#co_'+k).value)||0))]))],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['activity_stats',stats],['activity_stones',stones],['stat_rewards',srs],['map_name_mode',$('#sMapName').value],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
+      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['evolve_bonus',eb],['streak_rewards',sk],['battle',btv],['coins',Object.fromEntries(Object.keys(DEF_SET.coins).map(k=>[k,Math.max(0,Math.round(Number($('#co_'+k).value)||0))]))],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['activity_stats',stats],['activity_stones',stones],['stat_rewards',srs],['map_name_mode',$('#sMapName').value],['home_visit',$('#sVisit').checked],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
     else if(id==='fRate'){const v=Number($('#rate').value);if(!(v>=0&&v<=100))return toast('환산 기준은 0~100 사이로 입력해 주세요.',true);await call('set_setting',{key:'point_rate',value:v},'환산 기준을 적용했습니다.')}
     else if(id==='fRevoke'){const why=$('#rvWhy').value.trim(),d=f.dataset;closeModal();const ok=d.m?await call('revoke_mission',{id:d.m,reason:why},'지급을 취소했습니다.'):await call('revoke_book',{id:d.b,reason:why},'독서 실적을 취소했습니다.');if(ok){(W.ledgerRevoked=W.ledgerRevoked||new Set()).add(d.m||d.b);render()}}
     else if(id==='fAddBook'){const sid=f.dataset.id;if(await call('add_book',{student:sid,title:$('#abTitle').value,comp:null},'독서 실적을 등록했습니다.'))openStudent(sid)}

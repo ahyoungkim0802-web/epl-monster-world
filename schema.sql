@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.18: 친구 집 방문 + 스티커(정해진 6종, 친구마다 하루 1개, 자유 글쓰기 없음). 방문은 임시 열쇠(visit_key)로만, 이름은 지도 표시 방식 그대로
 -- v2.17: 코인·상점·내 집(가구·벽지·바닥·몬스터 액세서리). 활동 승인·배틀 승리·연속 기록·진화로 코인, 반려·취소 시 회수
 -- v2.16: 배틀에 내 몬스터 힘 반영(레벨·진화·어휘 스탯 치명타), 문제 유형 섞기(뜻 고르기·영어 고르기·듣기·철자)
 -- v2.15: 단어 배틀(단어장 업로드, 단어 동굴, 서버 출제·채점, 배틀 XP·진화석 조각)
@@ -320,6 +321,20 @@ create table if not exists mw_homes (
 );
 alter table mw_monsters add column if not exists acc text;   -- 씌운 액세서리
 
+-- v2.18 친구 집 방문 + 스티커
+alter table mw_profiles add column if not exists visit_key text not null default substr(md5(random()::text || clock_timestamp()::text), 1, 12);
+create unique index if not exists mw_profiles_visit_key on mw_profiles(visit_key);
+create table if not exists mw_stickers (
+  id uuid primary key default gen_random_uuid(),
+  from_student uuid not null references mw_profiles(id) on delete cascade,
+  to_student uuid not null references mw_profiles(id) on delete cascade,
+  kind text not null check (kind in ('like','fire','star','cute','cheer','best')),
+  day date not null,
+  created_at timestamptz not null default now(),
+  unique (from_student, to_student, day)            -- 한 친구에게 하루 1개
+);
+create index if not exists mw_stickers_to on mw_stickers(to_student, created_at desc);
+
 create table if not exists mw_word_misses (
   student_id uuid not null references mw_profiles(id) on delete cascade,
   academy_id uuid not null,
@@ -390,6 +405,7 @@ begin
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
+    "home_visit": true,
     "coins": {"activity":5,"battle_first":10,"battle_rewin":2,"gate_first":30,"streak":20,"evo_elite":50,"evo_legend":100},
     "battle": {"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":120,"gate_hp":240,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab","dmg_base":10,"dmg_lv_div":5,"dmg_lv_max":10,"dmg_elite":3,"dmg_legend":6,"crit_per":200,"crit_max":25,"mix_rev":25,"mix_listen":25},
     "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
@@ -553,6 +569,7 @@ alter table mw_coins       enable row level security;
 alter table mw_shop_items  enable row level security;
 alter table mw_inventory   enable row level security;
 alter table mw_homes       enable row level security;
+alter table mw_stickers    enable row level security;
 
 drop policy if exists mw_academies_read on mw_academies;
 create policy mw_academies_read on mw_academies for select to authenticated using (id = mw_my_academy());
@@ -719,6 +736,26 @@ $$;
 -- 연속 기록(내부용). streak_rewards = {활동: {days, stone}}. 평일(월~금)만 세고 주말은 건너뜀(끊기지 않음).
 --   len: 지금 이어지고 있는 연속 일수(승인 + 확인 중 포함, 오늘 아직 안 했으면 어제까지 이어진 기록)
 --   earned: 승인된 날만으로 만든 연속 구간마다 days일당 돌 1개. 지급 순서와 상관없이 기록에서 계산하므로 중복 지급이 없음
+-- ---------- v2.18 방문 도우미(내부용) ----------
+create or replace function mw_visit_ok(p_ac uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select coalesce((mw_setting(p_ac, 'home_visit') #>> '{}')::boolean, true)
+     and coalesce(mw_setting(p_ac, 'map_name_mode') #>> '{}', 'nickname') <> 'hidden';
+$$;
+-- 친구에게 보이는 이름(지도 표시 방식과 같음)
+create or replace function mw_pub_name(p_student uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select case coalesce(mw_setting(p.academy_id, 'map_name_mode') #>> '{}', 'nickname')
+           when 'real' then p.display_name
+           when 'masked' then case when char_length(p.display_name) <= 1 then '*'
+                                   when char_length(p.display_name) = 2 then left(p.display_name, 1) || '*'
+                                   else left(p.display_name, 1) || repeat('*', char_length(p.display_name) - 2) || right(p.display_name, 1) end
+           when 'hidden' then '친구'
+           else coalesce(nullif(btrim(m.nickname), ''), s.name, '새 모험가') end
+    from mw_profiles p left join mw_monsters m on m.id = p.active_monster left join mw_species s on s.id = m.species_id
+   where p.id = p_student;
+$$;
+
 -- ---------- v2.17 코인 도우미(내부용) ----------
 create or replace function mw_coin_cfg(p_ac uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
@@ -1037,12 +1074,13 @@ end $$;
 --   nickname: 몬스터 별명(없으면 몬스터 이름) / masked: 김*준 / real: 실명 / hidden: 이름·몬스터 없이 레벨 위치만
 -- 다른 학생의 계정 id는 학생에게 보내지 않습니다. 체험 모드 Demo.F.map 과 같은 규칙입니다.
 drop function if exists mw_map();
-create or replace function mw_map() returns table(student_id uuid, name text, level int, stage int, species_id text)
+create or replace function mw_map() returns table(student_id uuid, name text, level int, stage int, species_id text, vk text)
 language plpgsql stable security definer set search_path = public as $$
-declare v_t boolean := mw_is_teacher(); v_mode text;
+declare v_t boolean := mw_is_teacher(); v_mode text; v_visit boolean;
 begin
   if not (mw_student_ok() or v_t) then raise exception '승인된 계정이 아닙니다.'; end if;
   v_mode := coalesce(mw_setting(mw_my_academy(), 'map_name_mode') #>> '{}', 'nickname');
+  v_visit := mw_visit_ok(mw_my_academy());
   return query
   select case when v_t or p.id = auth.uid() then p.id end,
          case when v_t or p.id = auth.uid() or v_mode = 'real' then p.display_name
@@ -1053,7 +1091,8 @@ begin
               when v_mode = 'hidden' then null
               else coalesce(nullif(btrim(m.nickname), ''), s.name, '새 모험가') end,
          coalesce(m.level, 1), coalesce(m.stage, 1),
-         case when v_t or p.id = auth.uid() or v_mode <> 'hidden' then m.species_id end
+         case when v_t or p.id = auth.uid() or v_mode <> 'hidden' then m.species_id end,
+         case when v_t or (p.id <> auth.uid() and v_visit) then p.visit_key end   -- 친구 집 방문용 임시 열쇠(계정 번호 아님)
     from mw_profiles p
     left join mw_monsters m on m.id = p.active_monster
     left join mw_species s on s.id = m.species_id
@@ -1287,7 +1326,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle','coins') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle','coins','home_visit') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -1314,6 +1353,7 @@ begin
            or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
            or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
     raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
+  if p_key = 'home_visit' and jsonb_typeof(p_value) <> 'boolean' then raise exception '집 방문 설정이 올바르지 않습니다.'; end if;
   if p_key = 'coins' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
         where e.key not in ('activity','battle_first','battle_rewin','gate_first','streak','evo_elite','evo_legend')
@@ -1887,7 +1927,11 @@ begin
   select * into h from mw_homes where student_id = auth.uid();
   return jsonb_build_object('wall', coalesce(h.wall, 'wall_cream'), 'floor', coalesce(h.floor, 'floor_wood'), 'layout', coalesce(h.layout, '[]'::jsonb),
     'inventory', coalesce((select jsonb_object_agg(item_id, qty) from mw_inventory where student_id = auth.uid()), '{}'::jsonb),
-    'coins', mw_coin_balance(auth.uid()));
+    'coins', mw_coin_balance(auth.uid()),
+    'stickers', coalesce((select jsonb_object_agg(q.kind, q.n) from (select kind, count(*)::int as n from mw_stickers where to_student = auth.uid() group by kind) q), '{}'::jsonb),
+    'today', coalesce((select jsonb_agg(jsonb_build_object('kind', x.kind, 'name', mw_pub_name(x.from_student)) order by x.created_at desc)
+                        from mw_stickers x where x.to_student = auth.uid() and x.day = mw_seoul_today()), '[]'::jsonb),
+    'visit', mw_visit_ok(mw_my_academy()));
 end $$;
 
 -- 학생: 집 저장(가진 물건만, 가진 개수만큼, 방 안에만)
@@ -1936,6 +1980,56 @@ begin
                       from (select * from mw_coins where student_id = p_student order by created_at desc limit 20) c), '[]'::jsonb));
 end $$;
 
+-- ---------- v2.18 친구 집 방문 + 스티커 ----------
+-- 친구 집 보기(임시 열쇠로). 실명·코인·XP·공부 기록은 보내지 않음. 선생님은 실명으로 봄
+create or replace function mw_home_of(p_key text) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare t mw_profiles; h mw_homes; v_t boolean := mw_is_teacher();
+begin
+  if not (mw_student_ok() or v_t) then raise exception '승인된 계정이 아닙니다.'; end if;
+  select * into t from mw_profiles where visit_key = p_key and academy_id = mw_my_academy() and role = 'student' and active;
+  if not found then raise exception '찾을 수 없는 집입니다.'; end if;
+  if not v_t and not mw_visit_ok(t.academy_id) then raise exception '지금은 친구 집 방문이 꺼져 있어요.'; end if;
+  select * into h from mw_homes where student_id = t.id;
+  return jsonb_build_object('name', case when v_t then t.display_name else mw_pub_name(t.id) end, 'mine', t.id = auth.uid(),
+    'wall', coalesce(h.wall, 'wall_cream'), 'floor', coalesce(h.floor, 'floor_wood'), 'layout', coalesce(h.layout, '[]'::jsonb),
+    'monsters', coalesce((select jsonb_agg(jsonb_build_object('species_id', m.species_id, 'stage', m.stage, 'acc', m.acc))
+                           from (select * from mw_monsters where student_id = t.id and hatched order by (id = t.active_monster) desc, level desc limit 6) m), '[]'::jsonb),
+    'stickers', coalesce((select jsonb_object_agg(q.kind, q.n) from (select kind, count(*)::int as n from mw_stickers where to_student = t.id group by kind) q), '{}'::jsonb),
+    'sent_today', exists (select 1 from mw_stickers where from_student = auth.uid() and to_student = t.id and day = mw_seoul_today()));
+end $$;
+
+-- 학생: 스티커 보내기(정해진 6종, 친구마다 하루 1개). 10·50개 받으면 배지
+create or replace function mw_sticker(p_key text, p_kind text) returns void
+language plpgsql security definer set search_path = public as $$
+declare t mw_profiles; n int;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  select * into t from mw_profiles where visit_key = p_key and academy_id = mw_my_academy() and role = 'student' and active;
+  if not found then raise exception '찾을 수 없는 집입니다.'; end if;
+  if not mw_visit_ok(t.academy_id) then raise exception '지금은 친구 집 방문이 꺼져 있어요.'; end if;
+  if t.id = auth.uid() then raise exception '내 집에는 스티커를 보낼 수 없어요.'; end if;
+  if p_kind not in ('like','fire','star','cute','cheer','best') then raise exception '보낼 수 없는 스티커입니다.'; end if;
+  insert into mw_stickers(from_student, to_student, kind, day) values (auth.uid(), t.id, p_kind, mw_seoul_today())
+  on conflict (from_student, to_student, day) do nothing;
+  if not found then raise exception '오늘은 이 친구에게 이미 스티커를 보냈어요.'; end if;
+  select count(*) into n from mw_stickers where to_student = t.id;
+  if n >= 10 then perform mw_badge(t.id, 'sticker10'); end if;
+  if n >= 50 then perform mw_badge(t.id, 'sticker50'); end if;
+end $$;
+
+-- 선생님: 학생이 받은·보낸 스티커(실명)
+create or replace function mw_stickers_of(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform mw_need_student(p_student);
+  return jsonb_build_object(
+    'received', coalesce((select jsonb_agg(jsonb_build_object('kind', x.kind, 'name', p.display_name, 'at', x.created_at) order by x.created_at desc)
+                           from (select * from mw_stickers where to_student = p_student order by created_at desc limit 20) x join mw_profiles p on p.id = x.from_student), '[]'::jsonb),
+    'given', coalesce((select jsonb_agg(jsonb_build_object('kind', x.kind, 'name', p.display_name, 'at', x.created_at) order by x.created_at desc)
+                        from (select * from mw_stickers where from_student = p_student order by created_at desc limit 20) x join mw_profiles p on p.id = x.to_student), '[]'::jsonb));
+end $$;
+
 -- ---------- 8. 함수 실행 권한 ----------
 do $$
 declare f record;
@@ -1950,7 +2044,7 @@ begin
                          'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info',
                          'mw_seoul_today','mw_wd_idx','mw_battle_cfg','mw_battle_shards','mw_battle_day_ok','mw_battle_streak',
                          'mw_battle_mult','mw_word_backlog','mw_word_advance','mw_battle_recheck','mw_battle_state','mw_battle_reward',
-                         'mw_coin_cfg','mw_coin_balance','mw_coin_add','mw_coin_revoke','mw_coin_on_approve') then
+                         'mw_coin_cfg','mw_coin_balance','mw_coin_add','mw_coin_revoke','mw_coin_on_approve','mw_visit_ok','mw_pub_name') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
