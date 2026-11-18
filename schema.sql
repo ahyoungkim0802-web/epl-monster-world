@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.8: 선생님 계정 이름·비밀번호 변경(mw_update_teacher). 퇴사 시 계정을 새 선생님에게 넘길 때 사용
 -- v2.7: 진화 보너스. Elite·Legend로 진화하면 그 주 주간 정산의 입력할 포인트에 보너스(기본 500·1000)를 더함(XP 아님)
 -- v2.6: 진화 = 레벨 + 진화석. AR +1 → 진화석, NELT +1 → 전설석. Elite: 진화석·전설석 1개 / Legend: 전설석 1개 또는 진화석 2개
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
@@ -1008,6 +1009,32 @@ begin
   if length(coalesce(p_pw, '')) < 6 then raise exception '비밀번호는 6자 이상이어야 합니다.'; end if;
   update auth.users set encrypted_password = crypt(p_pw, gen_salt('bf')) where id = p_student;
   perform mw_log('reset_password', p_student, null);
+end $$;
+
+-- 선생님 계정 이름·비밀번호 변경(우리 학원 선생님 계정만). 퇴사한 선생님 계정을 새 선생님에게 넘길 때 씁니다.
+-- 비밀번호를 바꾸면 그 계정의 기존 로그인(세션)을 끊어서, 예전 사용자가 계속 접속하지 못하게 합니다.
+create or replace function mw_update_teacher(p_id uuid, p_name text, p_pw text) returns void
+language plpgsql security definer set search_path = public, extensions as $$
+declare v_name text := nullif(btrim(coalesce(p_name, '')), ''); v_pw text := nullif(coalesce(p_pw, ''), '');
+begin
+  perform mw_need_teacher();
+  if not exists (select 1 from mw_profiles where id = p_id and role = 'teacher' and academy_id = mw_my_academy()) then
+    raise exception '우리 학원 선생님 계정만 바꿀 수 있습니다.'; end if;
+  if v_name is null and v_pw is null then raise exception '바꿀 이름이나 비밀번호를 입력해 주세요.'; end if;
+  if v_pw is not null and length(v_pw) < 6 then raise exception '비밀번호는 6자 이상이어야 합니다.'; end if;
+  if v_name is not null then update mw_profiles set display_name = left(v_name, 20) where id = p_id; end if;
+  if v_pw is not null then
+    update auth.users set encrypted_password = crypt(v_pw, gen_salt('bf')) where id = p_id;
+    if p_id <> auth.uid() then
+      begin
+        delete from auth.refresh_tokens where user_id = p_id::text;
+        delete from auth.sessions where user_id = p_id;
+      exception when insufficient_privilege or undefined_table then
+        raise notice '기존 로그인 세션은 정리하지 못했습니다.';
+      end;
+    end if;
+  end if;
+  perform mw_log('update_teacher', null, jsonb_build_object('teacher', p_id, 'name', v_name is not null, 'pw', v_pw is not null));
 end $$;
 
 -- 학생별 요약(선생님 화면·XP 기준 분석용)

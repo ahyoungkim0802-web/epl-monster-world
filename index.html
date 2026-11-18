@@ -504,6 +504,8 @@ const Demo={
       this.st.set[a.key]=v},
     activate_student(a){this.T();const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='student');if(!p)throw new Error('학생을 찾을 수 없습니다.');p.active=a.active;if(a.name)p.display_name=a.name;p.teacher_id=p.teacher_id||this.uid},
     reset_password(){this.T()},
+    update_teacher(a){this.T();const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='teacher');if(!p)throw new Error('우리 학원 선생님 계정만 바꿀 수 있습니다.');const nm=String(a.name||'').trim(),pw=String(a.pw||'');
+      if(!nm&&!pw)throw new Error('바꿀 이름이나 비밀번호를 입력해 주세요.');if(pw&&pw.length<6)throw new Error('비밀번호는 6자 이상이어야 합니다.');if(nm)p.display_name=nm.slice(0,20)},
     settle(a){this.T();const L=this.st.settle=(this.st.settle||[]).filter(x=>!(a.students.includes(x.student_id)&&x.week_start===a.start));if(a.done)for(const id of a.students)L.push({student_id:id,week_start:a.start,done_at:new Date().toISOString()})}
   },
   async weekly(start){this.T();const s0=new Date(start+'T00:00:00'),e0=new Date(s0);e0.setDate(e0.getDate()+7);const L=this.st.ledger,rev=new Set(L.filter(l=>l.kind==='revoke').map(l=>l.mission_id||l.book_id).filter(Boolean));
@@ -783,6 +785,9 @@ function viewTeacher(){
       <div class="mi"><div class="t"><span>학생 정원</span></div><b class="num">${W.profiles.filter(p=>p.role==='student'&&p.active).length} / ${W.academy?W.academy.max_students:'—'}</b></div>
       ${DEMO?'':`<div class="mi"><div class="t"><span>학생 접속 주소</span><b id="acUrl" style="font-weight:500;font-size:13px">${esc(location.origin+location.pathname+'?a='+(W.academy?W.academy.code:''))}</b></div><button class="btn sm" data-act="copyUrl">복사</button></div>`}
       <p class="tiny muted" style="margin-top:8px">이 주소로 들어오면 학원 코드가 미리 채워집니다. 정원 추가·이용 문의는 운영사로 연락해 주세요.</p></section>
+     <section class="card"><h3>선생님 계정 <small>${W.profiles.filter(p=>p.role==='teacher').length}명</small></h3>
+      ${W.profiles.filter(p=>p.role==='teacher').sort((a,b)=>String(a.login_id).localeCompare(String(b.login_id))).map((p,i)=>`<div class="stack" style="gap:6px;padding:8px 0;border-bottom:1px solid var(--line,#e5e7f0)"><div class="row" style="justify-content:space-between"><span class="tiny muted">아이디 <b class="num">${esc(p.login_id)}</b>${p.id===W.me.id?' · 나':''}</span></div><div class="row"><input class="inp" id="tn_${i}" style="flex:1;min-width:110px" maxlength="20" value="${esc(p.display_name||'')}" aria-label="선생님 이름">${DEMO?'':`<input class="inp" id="tp_${i}" type="password" autocomplete="new-password" style="flex:1;min-width:130px" placeholder="새 비밀번호 (바꿀 때만)" aria-label="새 비밀번호">`}<button class="btn sm" data-act="saveTeacher" data-id="${p.id}" data-i="${i}">저장</button></div></div>`).join('')}
+      <p class="tiny muted" style="margin-top:8px">선생님이 퇴사하면 그 계정의 이름과 비밀번호를 바꿔 새 선생님에게 넘겨 주세요. 비밀번호를 바꾸면 그 계정의 기존 로그인은 끊어집니다. 아이디는 바뀌지 않습니다.</p></section>
      <section class="card"><h3>XP 기준 점검 <small>최근 4주 실측</small></h3>
       <div class="kpis"><div class="kpi"><b>${avg||'—'}</b><span>학생당 주간 평균 XP</span></div><div class="kpi"><b>${wk(s.evolve_levels[0])}</b><span>첫 진화까지</span></div><div class="kpi"><b>${wk(s.max_level)}</b><span>Lv.${s.max_level}까지</span></div></div>
       <p class="tiny muted" style="margin-top:12px">활동 기록이 있는 학생 ${act.length}명 기준입니다. 첫 진화가 6~10주, 최고 레벨이 1년 안팎이 되도록 레벨당 필요 XP를 조정하는 것을 권장합니다.</p>
@@ -905,6 +910,8 @@ const A={
   revoke(d){modal(`<h2>지급 취소</h2><form class="stack" id="fRevoke" data-m="${d.m}" data-b="${d.b}"><p class="muted">해당 XP를 회수하고 취소 기록을 남깁니다. 레벨이 내려갈 수 있습니다.</p><label class="field">취소 사유<input id="rvWhy" maxlength="200" required placeholder="예: 다른 학생에게 잘못 지급"></label><div class="row end"><button type="button" class="btn" data-act="close">닫기</button><button class="btn p">지급 취소</button></div></form>`)},
   async setStage(d){if(await call('set_stage',{student:d.id,stage:d.s},`영어 역량 단계를 ${d.s}(으)로 변경했습니다.`))openStudent(d.id)},
   async gift(d){if(await call('gift_egg',{student:d.id,species:$('#giftSp').value,reason:$('#giftWhy').value},'알을 선물했습니다.'))openStudent(d.id)},
+  async saveTeacher(d){const n=$('#tn_'+d.i),pw=$('#tp_'+d.i);const name=n?n.value.trim():'',p=pw?pw.value:'';if(!name)return toast('이름을 입력해 주세요.',true);if(p&&p.length<6)return toast('비밀번호는 6자 이상이어야 합니다.',true);
+    if(await call('update_teacher',{id:d.id,name,pw:p},p?'이름과 비밀번호를 바꿨습니다.':'이름을 바꿨습니다.')&&pw)pw.value=''},
   async resetPw(d){if(await call('reset_password',{student:d.id,pw:$('#rpPw').value},'비밀번호를 재설정했습니다.'))$('#rpPw').value=''},
   async activate(d){if(await call('activate_student',{id:d.id,name:'',active:d.v==='1'},d.v==='1'?'계정을 활성화했습니다.':'계정을 비활성화했습니다.'))closeModal()},
   newStudent(){modal(`<h2>학생 등록 <button class="btn sm g" data-act="close">닫기</button></h2><form class="stack" id="fNewStu"><label class="field">이름 (화면 표시용)<input id="nsName" maxlength="20" required></label><label class="field">아이디<input id="nsId" autocapitalize="none" pattern="[a-z0-9]{3,20}" placeholder="영문 소문자·숫자 3~20자" required></label>${DEMO?'':'<label class="field">초기 비밀번호<input id="nsPw" minlength="6" placeholder="6자 이상" required></label>'}<p class="tiny muted">이름과 아이디 외의 개인정보는 수집하지 않습니다. 실제 학생은 보호자 동의를 받은 뒤 등록해 주세요.</p><button class="btn p">등록</button></form>`)}
