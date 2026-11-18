@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.15: 단어 배틀(단어장 업로드, 단어 동굴, 서버 출제·채점, 배틀 XP·진화석 조각)
 -- v2.14: 담당 선생님 변경을 모든 선생님이 할 수 있게. 선생님 이름 목록(mw_teacher_names, 이름만)
 -- v2.13: 담당 선생님 변경(mw_set_teacher, 원장 전용)
 -- v2.12: 영어 역량 단계 이름 Speaker → Creator (Reader·Builder·Writer·Creator·Author)
@@ -181,6 +182,69 @@ create table if not exists mw_audit (             -- 변경 이력
   at timestamptz not null default now()
 );
 
+-- v2.15 단어 배틀: 단어장(학원별, 클라이언트에서 직접 읽을 수 없음), 학생 위치, 배틀 기록(정답 포함 → 직접 읽기 금지), 틀린 단어
+create table if not exists mw_words (
+  id uuid primary key default gen_random_uuid(),
+  academy_id uuid not null references mw_academies(id) on delete cascade,
+  book int not null check (book between 1 and 999),
+  unit int not null check (unit between 1 and 999),
+  no int not null check (no between 1 and 9999),
+  en text not null,
+  ko text not null,
+  updated_at timestamptz not null default now(),
+  unique (academy_id, book, unit, no)
+);
+create index if not exists mw_words_unit on mw_words(academy_id, book, unit);
+
+create table if not exists mw_word_pos (           -- 학생별 현재 권·Unit (start: 처음 지정한 위치, 밀린 Unit 계산 시작점)
+  student_id uuid primary key references mw_profiles(id) on delete cascade,
+  book int not null, unit int not null,
+  start_book int not null, start_unit int not null,
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists mw_battles (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  academy_id uuid not null,
+  day date not null,                               -- 한국 날짜
+  book int not null, unit int not null,            -- 수문장은 마지막 Unit(5·10·15…)
+  kind text not null check (kind in ('unit','gate')),
+  items jsonb not null,                            -- 문제와 정답(서버 전용)
+  queue jsonb not null,                            -- 남은 문제 순서
+  qn int not null default 1,                       -- 지금 문제 번호(같은 문제에 두 번 답하지 못하게)
+  hearts int not null, hearts_max int not null,
+  hp int not null, hp_max int not null,
+  combo int not null default 0,
+  status text not null default 'playing' check (status in ('playing','won','lost','quit')),
+  revoked boolean not null default false,          -- 그날 요청이 반려되어 회수됨
+  rewarded boolean not null default false,
+  first_win boolean not null default false,
+  xp int not null default 0,
+  shards int not null default 0,
+  mult numeric not null default 1,
+  created_at timestamptz not null default now(),
+  finished_at timestamptz
+);
+create index if not exists mw_battles_student on mw_battles(student_id, day);
+create index if not exists mw_battles_won on mw_battles(student_id, book, unit, kind) where status = 'won' and not revoked;
+
+create table if not exists mw_word_misses (
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  academy_id uuid not null,
+  k text not null,                                 -- 소문자 영어
+  misses int not null default 0,
+  last_at timestamptz not null default now(),
+  primary key (student_id, academy_id, k)
+);
+
+-- 배틀 XP는 별도 종류(battle / battle_revoke)로 기록 → 주간 정산(grant만 합산)과 스탯에는 들어가지 않음
+alter table mw_ledger add column if not exists battle_id uuid;
+alter table mw_ledger drop constraint if exists mw_ledger_kind_check;
+alter table mw_ledger add constraint mw_ledger_kind_check check (kind in ('grant','revoke','adjust','battle','battle_revoke'));
+create unique index if not exists mw_ledger_battle_once on mw_ledger(battle_id, kind) where battle_id is not null;
+
 -- ---------- 1-2. v1(단일 학원)에서 올라오는 경우의 구조 변경 ----------
 alter table mw_profiles add column if not exists academy_id uuid references mw_academies(id);
 alter table mw_profiles drop constraint if exists mw_profiles_login_id_key;
@@ -236,6 +300,7 @@ begin
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
+    "battle": {"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":10,"gate_hp":20,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab"},
     "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
     "activity_stats": {"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
     "stat_rewards": [{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
@@ -384,6 +449,10 @@ alter table mw_rewards     enable row level security;
 alter table mw_settings    enable row level security;
 alter table mw_settlements enable row level security;
 alter table mw_audit       enable row level security;
+alter table mw_words       enable row level security;   -- 정책 없음 = 서버 함수로만(정답 보호)
+alter table mw_word_pos    enable row level security;
+alter table mw_battles     enable row level security;
+alter table mw_word_misses enable row level security;
 
 drop policy if exists mw_academies_read on mw_academies;
 create policy mw_academies_read on mw_academies for select to authenticated using (id = mw_my_academy());
@@ -494,9 +563,10 @@ begin
   return v_id;
 end $$;
 
+drop function if exists mw_apply_xp(uuid, uuid, int, text, text, uuid, uuid);
 create or replace function mw_apply_xp(
   p_student uuid, p_monster uuid, p_amount int, p_kind text, p_reason text,
-  p_mission uuid, p_book uuid) returns int
+  p_mission uuid, p_book uuid, p_battle uuid default null) returns int
 language plpgsql security definer set search_path = public as $$
 declare m mw_monsters; v_ac uuid; v_per int; v_max int; v_xp int; v_lvl int; v_stage int;
 begin
@@ -511,8 +581,8 @@ begin
   update mw_monsters set xp = v_xp, level = v_lvl, stage = v_stage,
          seen_level = least(seen_level, v_lvl), seen_stage = least(seen_stage, v_stage)
    where id = m.id;
-  insert into mw_ledger(student_id, monster_id, amount, kind, reason, mission_id, book_id, level_after, actor)
-  values (p_student, m.id, p_amount, p_kind, coalesce(p_reason, ''), p_mission, p_book, v_lvl, auth.uid());
+  insert into mw_ledger(student_id, monster_id, amount, kind, reason, mission_id, book_id, battle_id, level_after, actor)
+  values (p_student, m.id, p_amount, p_kind, coalesce(p_reason, ''), p_mission, p_book, p_battle, v_lvl, auth.uid());
   if v_lvl >= 10 then perform mw_badge(p_student, 'lv10'); end if;
   if v_lvl >= 25 then perform mw_badge(p_student, 'lv25'); end if;
   if v_stage >= 2 then perform mw_badge(p_student, 'evo_explorer'); end if;
@@ -547,6 +617,24 @@ $$;
 -- 연속 기록(내부용). streak_rewards = {활동: {days, stone}}. 평일(월~금)만 세고 주말은 건너뜀(끊기지 않음).
 --   len: 지금 이어지고 있는 연속 일수(승인 + 확인 중 포함, 오늘 아직 안 했으면 어제까지 이어진 기록)
 --   earned: 승인된 날만으로 만든 연속 구간마다 days일당 돌 1개. 지급 순서와 상관없이 기록에서 계산하므로 중복 지급이 없음
+-- ---------- v2.15 단어 배틀 도우미(내부용) ----------
+create or replace function mw_seoul_today() returns date
+language sql stable as $$ select (now() at time zone 'Asia/Seoul')::date $$;
+
+-- 평일 번호(주말은 그 주 금요일 번호). 연속 기록 계산용
+create or replace function mw_wd_idx(d date) returns int
+language sql immutable as $$ select ((d - date '2024-01-01') / 7) * 5 + least((d - date '2024-01-01') % 7, 4) $$;
+
+create or replace function mw_battle_cfg(p_ac uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select '{"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":10,"gate_hp":20,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab"}'::jsonb || coalesce(mw_setting(p_ac, 'battle'), '{}'::jsonb);
+$$;
+
+create or replace function mw_battle_shards(p_student uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(shards), 0)::int from mw_battles where student_id = p_student and status = 'won' and not revoked;
+$$;
+
 create or replace function mw_streak_info(p_student uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
   with cfg as (select coalesce(mw_setting(p.academy_id, 'streak_rewards'), '{}'::jsonb) as m from mw_profiles p where p.id = p_student),
@@ -596,9 +684,12 @@ language sql stable security definer set search_path = public as $$
   streak as (
     select coalesce(sum(case when e.value ->> 'stone' = 'evo' then (e.value ->> 'earned')::int end), 0)::int as evo,
            coalesce(sum(case when e.value ->> 'stone' = 'legend' then (e.value ->> 'earned')::int end), 0)::int as legend
-      from jsonb_each(mw_streak_info(p_student)) e)
+      from jsonb_each(mw_streak_info(p_student)) e),
+  shard as (   -- v2.15: 배틀 진화석 조각 shards_per_stone 개 = 진화석 1개
+    select (mw_battle_shards(p_student) / greatest(1, coalesce((mw_battle_cfg(p.academy_id) ->> 'shards_per_stone')::int, 100)))::int as evo
+      from mw_profiles p where p.id = p_student)
   select jsonb_build_object(
-    'evo',    greatest(0, coalesce((select n from earned where k = 'evo'), 0)    + (select evo from streak)    - (select evo from spent)),
+    'evo',    greatest(0, coalesce((select n from earned where k = 'evo'), 0)    + (select evo from streak) + coalesce((select evo from shard), 0) - (select evo from spent)),
     'legend', greatest(0, coalesce((select n from earned where k = 'legend'), 0) + (select legend from streak) - (select legend from spent)));
 $$;
 
@@ -907,6 +998,7 @@ begin
       if v_mon is null then v_skip := v_skip + 1; continue; end if;   -- 스타터 미선택: 배정만 됨
       update mw_missions set status = 'approved', decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = v_id;
       perform mw_apply_xp(s, v_mon, v_xp, 'grant', p_activity, v_id, null);
+      if p_activity = coalesce(mw_battle_cfg(mw_my_academy()) ->> 'advance_act', 'vocab') then perform mw_word_advance(s); end if;
     end if;
     v_done := v_done + 1;
   end loop;
@@ -925,8 +1017,10 @@ begin
       if v_mon is null then v_skip := v_skip + 1; continue; end if;
       update mw_missions set status = 'approved', decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = r.id;
       perform mw_apply_xp(r.student_id, v_mon, r.xp, 'grant', r.activity, r.id, null);
+      if r.activity = coalesce(mw_battle_cfg(mw_my_academy()) ->> 'advance_act', 'vocab') then perform mw_word_advance(r.student_id); end if;
     else
       update mw_missions set status = 'rejected', decided_by = auth.uid(), decided_at = now() where id = r.id;
+      perform mw_battle_recheck(r.student_id, r.due_date);
     end if;
     v_done := v_done + 1;
   end loop;
@@ -942,15 +1036,19 @@ begin
   if not found then raise exception '취소할 수 있는 승인 건이 아닙니다.'; end if;
   update mw_missions set status = 'revoked', note = left(coalesce(p_reason, ''), 200), decided_by = auth.uid(), decided_at = now() where id = r.id;
   perform mw_apply_xp(r.student_id, r.monster_id, -r.xp, 'revoke', coalesce(nullif(p_reason, ''), '승인 취소'), r.id, null);
+  perform mw_battle_recheck(r.student_id, r.due_date);
 end $$;
 
 create or replace function mw_cancel_mission(p_id uuid) returns void
 language plpgsql security definer set search_path = public as $$
+declare v_s uuid; v_d date;
 begin
   perform mw_need_teacher();
   update mw_missions set status = 'cancelled', decided_by = auth.uid(), decided_at = now()
-   where id = p_id and status in ('assigned','requested','rejected') and mw_same(student_id);
+   where id = p_id and status in ('assigned','requested','rejected') and mw_same(student_id)
+  returning student_id, due_date into v_s, v_d;
   if not found then raise exception '삭제할 수 없는 미션입니다.'; end if;
+  perform mw_battle_recheck(v_s, v_d);
 end $$;
 
 create or replace function mw_book_rewards(p_student uuid) returns void
@@ -988,6 +1086,7 @@ begin
       perform mw_book_rewards(r.student_id);
     else
       update mw_books set status = 'rejected', decided_by = auth.uid(), decided_at = now() where id = r.id;
+      perform mw_battle_recheck(r.student_id, (r.created_at at time zone 'Asia/Seoul')::date);
     end if;
     v_done := v_done + 1;
   end loop;
@@ -1017,6 +1116,7 @@ begin
   select amount into v_xp from mw_ledger where book_id = r.id and kind = 'grant';
   update mw_books set status = 'revoked', note = left(coalesce(p_reason, ''), 200), decided_by = auth.uid(), decided_at = now() where id = r.id;
   perform mw_apply_xp(r.student_id, r.monster_id, -coalesce(v_xp, 0), 'revoke', coalesce(nullif(p_reason, ''), '독서 실적 취소'), null, r.id);
+  perform mw_battle_recheck(r.student_id, (r.created_at at time zone 'Asia/Seoul')::date);
 end $$;
 
 create or replace function mw_adjust_xp(p_student uuid, p_amount int, p_reason text) returns void
@@ -1053,7 +1153,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -1080,6 +1180,21 @@ begin
            or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
            or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
     raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
+  if p_key = 'battle' and (jsonb_typeof(p_value) <> 'object' or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key not in ('first_xp','rewin_xp','gate_xp','gate_rewin_xp','shard_first','shard_rewin','shard_gate','shard_gate_rewin',
+                            'shards_per_stone','over_ratio','streak','hearts','hp','gate_hp','pool','gate_q','combo','advance_act')
+           or case e.key
+                when 'streak' then jsonb_typeof(e.value) <> 'array' or jsonb_array_length(e.value) > 6 or exists (
+                    select 1 from jsonb_array_elements(e.value) s
+                     where jsonb_typeof(s) <> 'object' or coalesce(s ->> 'days', '') !~ '^[1-9][0-9]{0,2}$'
+                        or coalesce(s ->> 'mult', '') !~ '^[0-9]+(\.[0-9]+)?$' or (s ->> 'mult')::numeric not between 1 and 5)
+                when 'advance_act' then jsonb_typeof(e.value) <> 'string' or (e.value #>> '{}') !~ '^[a-z0-9_]{1,24}$'
+                when 'over_ratio' then jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric not between 0 and 1
+                else jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric <> round((e.value #>> '{}')::numeric)
+                     or (e.value #>> '{}')::numeric not between (case when e.key in ('shards_per_stone','hearts','hp','gate_hp','pool','gate_q','combo') then 1 else 0 end) and 10000
+              end)) then
+    raise exception '단어 배틀 설정이 올바르지 않습니다.'; end if;
   if p_key = 'streak_rewards' and (jsonb_typeof(p_value) <> 'object' or (select count(*) from jsonb_object_keys(p_value)) > 10 or exists (
        select 1 from jsonb_each(p_value) e
         where e.key !~ '^[a-z0-9_]{1,24}$' or jsonb_typeof(e.value) <> 'object'
@@ -1223,6 +1338,334 @@ begin
   perform mw_log('settle', null, jsonb_build_object('week', p_start, 'done', p_done, 'count', coalesce(array_length(p_students, 1), 0)));
 end $$;
 
+-- ---------- v2.15 단어 배틀 ----------
+-- 그날 배틀이 열리는가: 그날 "다 했어요" 요청 중이거나 승인된 활동(미션·독서)이 있으면 열림
+create or replace function mw_battle_day_ok(p_student uuid, p_day date) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from mw_missions m where m.student_id = p_student and m.due_date = p_day and m.status in ('requested','approved'))
+      or exists (select 1 from mw_books b where b.student_id = p_student and (b.created_at at time zone 'Asia/Seoul')::date = p_day
+                  and b.status in ('requested','approved'));
+$$;
+
+-- 배틀 연속 기록: 배틀에서 이긴 평일이 며칠 이어졌는지(주말은 세지도 끊지도 않음). p_day 가 주말이면 그 주 금요일까지
+create or replace function mw_battle_streak(p_student uuid, p_day date) returns int
+language plpgsql stable security definer set search_path = public as $$
+declare v int := mw_wd_idx(p_day); n int := 0;
+begin
+  loop
+    exit when not exists (select 1 from mw_battles b where b.student_id = p_student and b.status = 'won' and not b.revoked
+                           and b.day <= p_day and (b.day - date '2024-01-01') % 7 < 5 and mw_wd_idx(b.day) = v);
+    n := n + 1; v := v - 1;
+  end loop;
+  return n;
+end $$;
+
+create or replace function mw_battle_mult(p_cfg jsonb, p_streak int) returns numeric
+language sql immutable as $$
+  select greatest(1, coalesce(max((e ->> 'mult')::numeric) filter (where (e ->> 'days')::int <= p_streak), 1))
+    from jsonb_array_elements(coalesce(p_cfg -> 'streak', '[]'::jsonb)) e;
+$$;
+
+-- 밀린 Unit: 처음 지정한 위치부터 현재 Unit 앞까지, 한 번도 이기지 않은 Unit 수
+create or replace function mw_word_backlog(p_student uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select count(*)::int from (
+    select distinct w.book, w.unit from mw_words w
+      join mw_profiles p on p.id = p_student and w.academy_id = p.academy_id
+      join mw_word_pos s on s.student_id = p_student
+     where (w.book, w.unit) >= (s.start_book, s.start_unit) and (w.book, w.unit) < (s.book, s.unit)) u
+   where not exists (select 1 from mw_battles x where x.student_id = p_student and x.book = u.book and x.unit = u.unit
+                      and x.kind = 'unit' and x.status = 'won' and not x.revoked);
+$$;
+
+-- 단어시험 승인 → 현재 Unit +1 (권의 끝이면 다음 권 첫 Unit)
+create or replace function mw_word_advance(p_student uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare pos mw_word_pos; v_ac uuid; v_next int;
+begin
+  select * into pos from mw_word_pos where student_id = p_student for update;
+  if not found then return; end if;
+  select academy_id into v_ac from mw_profiles where id = p_student;
+  if exists (select 1 from mw_words where academy_id = v_ac and book = pos.book and unit = pos.unit + 1)
+     or not exists (select 1 from mw_words where academy_id = v_ac) then
+    update mw_word_pos set unit = pos.unit + 1, updated_at = now() where student_id = p_student;
+  else
+    select min(unit) into v_next from mw_words where academy_id = v_ac and book = pos.book + 1;
+    if v_next is not null then update mw_word_pos set book = pos.book + 1, unit = v_next, updated_at = now() where student_id = p_student; end if;
+  end if;
+end $$;
+
+-- 그날 활동이 반려·취소되어 배틀 조건이 사라지면: 그날 배틀 XP·조각 회수(연속 기록에서도 빠짐)
+create or replace function mw_battle_recheck(p_student uuid, p_day date) returns void
+language plpgsql security definer set search_path = public as $$
+declare b mw_battles; v_mon uuid;
+begin
+  if p_day is null or mw_battle_day_ok(p_student, p_day) then return; end if;
+  update mw_battles set status = 'quit', finished_at = now() where student_id = p_student and day = p_day and status = 'playing';
+  for b in select * from mw_battles where student_id = p_student and day = p_day and status = 'won' and not revoked for update loop
+    update mw_battles set revoked = true where id = b.id;
+    if b.xp > 0 then
+      select monster_id into v_mon from mw_ledger where battle_id = b.id and kind = 'battle';
+      if v_mon is not null then
+        perform mw_apply_xp(p_student, v_mon, -b.xp, 'battle_revoke', '배틀 회수 · 요청 반려', null, null, b.id);
+      end if;
+    end if;
+  end loop;
+end $$;
+
+-- 화면에 보낼 지금 문제(정답은 보내지 않음)
+create or replace function mw_battle_state(b mw_battles) returns jsonb
+language plpgsql stable as $$
+declare it jsonb;
+begin
+  if b.status = 'playing' and jsonb_array_length(b.queue) > 0 then it := b.items -> ((b.queue ->> 0)::int); end if;
+  return jsonb_build_object('id', b.id, 'kind', b.kind, 'book', b.book, 'unit', b.unit, 'status', b.status,
+    'hp', b.hp, 'hp_max', b.hp_max, 'hearts', b.hearts, 'hearts_max', b.hearts_max, 'combo', b.combo,
+    'q', case when it is null then null else jsonb_build_object('n', b.qn, 't', it ->> 't',
+           'prompt', case when it ->> 't' = 'spell' then it ->> 'ko' else it ->> 'en' end,
+           'options', case when it ->> 't' = 'spell' then null else it -> 'o' end) end);
+end $$;
+
+-- 승리 보상(서버만 계산, 판마다 한 번)
+create or replace function mw_battle_reward(p_battle uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare b mw_battles; v_cfg jsonb; v_gate boolean; v_first boolean; v_today boolean; v_base int := 0; v_sh int := 0;
+        v_streak int; v_mult numeric; v_raw int; v_ws date; v_class int; v_already int; v_room int; v_give int;
+        v_mon uuid; v_per int; v_before int;
+begin
+  select * into b from mw_battles where id = p_battle for update;
+  if b.status <> 'won' or b.rewarded then return null; end if;
+  if not mw_battle_day_ok(b.student_id, b.day) then
+    update mw_battles set revoked = true, rewarded = true where id = b.id;
+    return jsonb_build_object('xp', 0, 'shards', 0, 'void', true);
+  end if;
+  v_cfg := mw_battle_cfg(b.academy_id); v_gate := b.kind = 'gate';
+  v_first := not exists (select 1 from mw_battles x where x.student_id = b.student_id and x.book = b.book and x.unit = b.unit
+                          and x.kind = b.kind and x.status = 'won' and not x.revoked and x.id <> b.id);
+  v_today := exists (select 1 from mw_battles x where x.student_id = b.student_id and x.book = b.book and x.unit = b.unit
+                      and x.kind = b.kind and x.status = 'won' and not x.revoked and x.id <> b.id and x.day = b.day);
+  if v_first then
+    v_base := (v_cfg ->> (case when v_gate then 'gate_xp' else 'first_xp' end))::int;
+    v_sh := (v_cfg ->> (case when v_gate then 'shard_gate' else 'shard_first' end))::int;
+  elsif not v_today then                            -- 재승리 보상은 하루에 Unit당 1번
+    v_base := (v_cfg ->> (case when v_gate then 'gate_rewin_xp' else 'rewin_xp' end))::int;
+    v_sh := (v_cfg ->> (case when v_gate then 'shard_gate_rewin' else 'shard_rewin' end))::int;
+  end if;
+  v_streak := mw_battle_streak(b.student_id, b.day);
+  v_mult := mw_battle_mult(v_cfg, v_streak);
+  v_raw := round(v_base * v_mult)::int;
+  -- 주간 상한: 그 주 수업 XP(승인된 지급, 취소 제외)를 넘는 부분은 over_ratio 만큼만
+  v_ws := b.day - (extract(isodow from b.day)::int - 1);
+  select greatest(0, coalesce(sum(l.amount), 0))::int into v_class from mw_ledger l
+   where l.student_id = b.student_id and l.kind = 'grant'
+     and (l.created_at at time zone 'Asia/Seoul')::date between v_ws and v_ws + 6
+     and not exists (select 1 from mw_ledger r where r.kind = 'revoke'
+            and ((l.mission_id is not null and r.mission_id = l.mission_id) or (l.book_id is not null and r.book_id = l.book_id)));
+  select coalesce(sum(l.amount), 0)::int into v_already from mw_ledger l
+   where l.student_id = b.student_id and l.kind in ('battle','battle_revoke')
+     and (l.created_at at time zone 'Asia/Seoul')::date between v_ws and v_ws + 6;
+  v_room := greatest(0, v_class - v_already);
+  v_give := least(v_raw, v_room) + floor((v_raw - least(v_raw, v_room)) * coalesce((v_cfg ->> 'over_ratio')::numeric, 0.25))::int;
+  v_per := greatest(1, coalesce((v_cfg ->> 'shards_per_stone')::int, 100));
+  v_before := mw_battle_shards(b.student_id);
+  select active_monster into v_mon from mw_profiles where id = b.student_id;
+  if v_give > 0 and v_mon is not null then
+    perform mw_apply_xp(b.student_id, v_mon, v_give, 'battle', case when v_gate then '수문장 승리' else 'Unit 승리' end, null, null, b.id);
+  else v_give := 0; end if;
+  update mw_battles set xp = v_give, shards = v_sh, first_win = v_first, mult = v_mult, rewarded = true where id = b.id;
+  return jsonb_build_object('xp', v_give, 'raw', v_raw, 'shards', v_sh, 'first', v_first, 'mult', v_mult, 'streak', v_streak,
+    'limited', (not v_first and v_today), 'shards_total', v_before + v_sh, 'per', v_per,
+    'stone', ((v_before + v_sh) / v_per) > (v_before / v_per));
+end $$;
+
+-- 학생: 배틀 시작. 서버가 문제를 뽑아 저장하고 첫 문제만(정답 없이) 돌려줌
+create or replace function mw_battle_start(p_book int, p_unit int, p_gate boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid := mw_my_academy(); v_cfg jsonb; pos mw_word_pos; v_units int[]; v_items jsonb := '[]'::jsonb;
+        r record; v_i int := 0; v_opts jsonb; v_hp int; b mw_battles; v_today date := mw_seoul_today(); v_gate boolean := coalesce(p_gate, false);
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  perform 1 from mw_profiles where id = auth.uid() for update;
+  if (select active_monster from mw_profiles where id = auth.uid()) is null then raise exception '먼저 몬스터를 골라 주세요.'; end if;
+  select * into pos from mw_word_pos where student_id = auth.uid();
+  if not found then raise exception '선생님이 아직 단어장 위치를 정하지 않았습니다.'; end if;
+  if not mw_battle_day_ok(auth.uid(), v_today) then raise exception '오늘 "다 했어요"를 하나 남기면 단어 동굴이 열려요.'; end if;
+  v_cfg := mw_battle_cfg(v_ac);
+  if p_book is null or p_unit is null or p_book > pos.book or (p_book = pos.book and p_unit > pos.unit) then
+    raise exception '아직 열리지 않은 Unit입니다.'; end if;
+  if v_gate then
+    if p_unit % 5 <> 0 then raise exception '수문장은 5 Unit마다 있습니다.'; end if;
+    v_units := array(select generate_series(p_unit - 4, p_unit));
+    if exists (select 1 from (select distinct unit from mw_words where academy_id = v_ac and book = p_book and unit = any(v_units)) u
+                where not exists (select 1 from mw_battles x where x.student_id = auth.uid() and x.book = p_book and x.unit = u.unit
+                                   and x.kind = 'unit' and x.status = 'won' and not x.revoked)) then
+      raise exception '수문장은 5개 Unit을 모두 한 번씩 이겨야 열립니다.'; end if;
+  else
+    v_units := array[p_unit];
+  end if;
+  update mw_battles set status = 'quit', finished_at = now() where student_id = auth.uid() and status = 'playing';
+  for r in
+    with w as (select lower(btrim(en)) as k, min(btrim(en)) as en, string_agg(distinct btrim(ko), ' / ') as ko
+                 from mw_words where academy_id = v_ac and book = p_book and unit = any(v_units) group by 1)
+    select w.k, w.en, w.ko from w
+      left join mw_word_misses m on m.student_id = auth.uid() and m.academy_id = v_ac and m.k = w.k
+     order by (coalesce(m.misses, 0) > 0) desc, random()
+     limit (case when v_gate then (v_cfg ->> 'gate_q')::int else (v_cfg ->> 'pool')::int end)
+  loop
+    -- 오답 보기: 같은 Unit의 다른 뜻 먼저, 모자라면 같은 권에서
+    select coalesce(jsonb_agg(z.ko), '[]'::jsonb) into v_opts from (
+      select y.ko from (
+        select string_agg(distinct btrim(w2.ko), ' / ') as ko, bool_or(w2.unit = any(v_units)) as near
+          from mw_words w2 where w2.academy_id = v_ac and w2.book = p_book and lower(btrim(w2.en)) <> r.k
+         group by lower(btrim(w2.en))) y
+       where y.ko <> r.ko
+       order by y.near desc, random() limit 3) z;
+    select jsonb_agg(x order by random()) into v_opts from jsonb_array_elements(v_opts || jsonb_build_array(r.ko)) x;
+    v_items := v_items || jsonb_build_array(jsonb_build_object('k', r.k, 'en', r.en, 'ko', r.ko,
+                 't', case when v_gate and v_i % 2 = 1 then 'spell' else 'mc' end, 'o', v_opts));
+    v_i := v_i + 1;
+  end loop;
+  if v_i = 0 then raise exception '이 Unit에는 아직 단어가 없습니다.'; end if;
+  v_hp := (v_cfg ->> (case when v_gate then 'gate_hp' else 'hp' end))::int;
+  insert into mw_battles(student_id, academy_id, day, book, unit, kind, items, queue, qn, hearts, hearts_max, hp, hp_max)
+  values (auth.uid(), v_ac, v_today, p_book, p_unit, case when v_gate then 'gate' else 'unit' end, v_items,
+          (select jsonb_agg(g) from generate_series(0, v_i - 1) g), 1,
+          (v_cfg ->> 'hearts')::int, (v_cfg ->> 'hearts')::int, v_hp, v_hp)
+  returning * into b;
+  return mw_battle_state(b);
+end $$;
+
+-- 학생: 답하기. 서버가 채점하고 다음 문제를 돌려줌. 끝나면 보상도 서버가 지급
+create or replace function mw_battle_answer(p_battle uuid, p_n int, p_answer text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare b mw_battles; v_cfg jsonb; it jsonb; v_cur int; v_ok boolean; v_dmg int := 0; v_rew jsonb;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  select * into b from mw_battles where id = p_battle and student_id = auth.uid() for update;
+  if not found then raise exception '배틀을 찾을 수 없습니다.'; end if;
+  if b.status <> 'playing' then raise exception '이미 끝난 배틀입니다.'; end if;
+  if p_n is distinct from b.qn then raise exception '이미 답한 문제입니다.'; end if;
+  v_cfg := mw_battle_cfg(b.academy_id);
+  v_cur := (b.queue ->> 0)::int; it := b.items -> v_cur;
+  if it ->> 't' = 'spell' then v_ok := lower(btrim(coalesce(p_answer, ''))) = lower(btrim(it ->> 'en'));
+  else v_ok := coalesce(p_answer, '') = it ->> 'ko'; end if;
+  if v_ok then
+    b.combo := b.combo + 1;
+    v_dmg := case when b.combo % greatest(1, (v_cfg ->> 'combo')::int) = 0 then 2 else 1 end;   -- 5번째·10번째 연속 정답은 -2
+    b.hp := greatest(0, b.hp - v_dmg);
+    b.queue := b.queue - 0;
+    update mw_word_misses set misses = greatest(0, misses - 1) where student_id = auth.uid() and academy_id = b.academy_id and k = it ->> 'k';
+  else
+    b.hearts := b.hearts - 1; b.combo := 0;
+    b.queue := (b.queue - 0) || jsonb_build_array(v_cur);   -- 틀린 단어는 뒤에서 다시
+    insert into mw_word_misses(student_id, academy_id, k, misses, last_at) values (auth.uid(), b.academy_id, it ->> 'k', 1, now())
+    on conflict (student_id, academy_id, k) do update set misses = mw_word_misses.misses + 1, last_at = now();
+  end if;
+  if jsonb_array_length(b.queue) = 0 then b.queue := (select jsonb_agg(g) from generate_series(0, jsonb_array_length(b.items) - 1) g); end if;
+  b.qn := b.qn + 1;
+  if b.hp <= 0 then b.status := 'won'; b.finished_at := now();
+  elsif b.hearts <= 0 then b.status := 'lost'; b.finished_at := now(); end if;
+  update mw_battles set combo = b.combo, hp = b.hp, hearts = b.hearts, queue = b.queue, qn = b.qn, status = b.status, finished_at = b.finished_at
+   where id = b.id;
+  if b.status = 'won' then v_rew := mw_battle_reward(b.id); end if;
+  select * into b from mw_battles where id = p_battle;
+  return mw_battle_state(b) || jsonb_build_object('correct', v_ok, 'dmg', v_dmg,
+    'answer', case when it ->> 't' = 'spell' then it ->> 'en' else it ->> 'ko' end, 'reward', v_rew);
+end $$;
+
+-- 학생: 단어 동굴 현황(단어는 보내지 않음)
+create or replace function mw_cave() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_ac uuid := mw_my_academy(); pos mw_word_pos; v_cfg jsonb; v_books jsonb; v_streak int; v_today date := mw_seoul_today();
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  v_cfg := mw_battle_cfg(v_ac);
+  v_streak := mw_battle_streak(auth.uid(), v_today);
+  select * into pos from mw_word_pos where student_id = auth.uid();
+  if found then
+    select jsonb_agg(jsonb_build_object('book', bk.book, 'units', bk.units) order by bk.book) into v_books from (
+      select u.book, jsonb_agg(jsonb_build_object('unit', u.unit, 'words', u.n,
+               'won', exists (select 1 from mw_battles x where x.student_id = auth.uid() and x.book = u.book and x.unit = u.unit
+                               and x.kind = 'unit' and x.status = 'won' and not x.revoked),
+               'gate_won', exists (select 1 from mw_battles x where x.student_id = auth.uid() and x.book = u.book and x.unit = u.unit
+                               and x.kind = 'gate' and x.status = 'won' and not x.revoked),
+               'locked', (u.book = pos.book and u.unit > pos.unit)) order by u.unit) as units
+        from (select book, unit, count(*)::int as n from mw_words where academy_id = v_ac and book <= pos.book group by book, unit) u
+       group by u.book) bk;
+  end if;
+  return jsonb_build_object(
+    'pos', case when pos.student_id is null then null else jsonb_build_object('book', pos.book, 'unit', pos.unit) end,
+    'open', mw_battle_day_ok(auth.uid(), v_today), 'books', coalesce(v_books, '[]'::jsonb),
+    'shards', mw_battle_shards(auth.uid()), 'per', greatest(1, (v_cfg ->> 'shards_per_stone')::int),
+    'streak', v_streak, 'mult', mw_battle_mult(v_cfg, v_streak),
+    'backlog', case when pos.student_id is null then 0 else mw_word_backlog(auth.uid()) end);
+end $$;
+
+-- 선생님: 단어 올리기(한 번에 1000개까지, 같은 권·Unit·번호는 덮어씀)
+create or replace function mw_word_import(p_rows jsonb) returns int
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid := mw_my_academy(); e jsonb; n int := 0;
+begin
+  perform mw_need_teacher();
+  if jsonb_typeof(p_rows) <> 'array' or jsonb_array_length(p_rows) > 1000 then raise exception '한 번에 1000개까지 올릴 수 있습니다.'; end if;
+  for e in select * from jsonb_array_elements(p_rows) loop
+    if coalesce(e ->> 'b', '') !~ '^[1-9][0-9]{0,2}$' or coalesce(e ->> 'u', '') !~ '^[1-9][0-9]{0,2}$' or coalesce(e ->> 'n', '') !~ '^[1-9][0-9]{0,3}$'
+       or length(btrim(coalesce(e ->> 'en', ''))) not between 1 and 100 or length(btrim(coalesce(e ->> 'ko', ''))) not between 1 and 200 then
+      raise exception '%번째 단어의 형식이 올바르지 않습니다. (권·Unit·번호는 1 이상 숫자, 영어·뜻은 비울 수 없음)', n + 1; end if;
+    insert into mw_words(academy_id, book, unit, no, en, ko)
+    values (v_ac, (e ->> 'b')::int, (e ->> 'u')::int, (e ->> 'n')::int, btrim(e ->> 'en'), btrim(e ->> 'ko'))
+    on conflict (academy_id, book, unit, no) do update set en = excluded.en, ko = excluded.ko, updated_at = now();
+    n := n + 1;
+  end loop;
+  perform mw_log('word_import', null, jsonb_build_object('count', n));
+  return n;
+end $$;
+
+create or replace function mw_word_books() returns table(book int, units int, words int)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform mw_need_teacher();
+  return query select w.book, count(distinct w.unit)::int, count(*)::int from mw_words w
+   where w.academy_id = mw_my_academy() group by w.book order by w.book;
+end $$;
+
+create or replace function mw_word_delete_book(p_book int) returns int
+language plpgsql security definer set search_path = public as $$
+declare n int;
+begin
+  perform mw_need_teacher();
+  delete from mw_words where academy_id = mw_my_academy() and book = p_book;
+  get diagnostics n = row_count;
+  perform mw_log('word_delete_book', null, jsonb_build_object('book', p_book, 'count', n));
+  return n;
+end $$;
+
+-- 선생님: 학생 현재 권·Unit 지정(처음 지정한 위치가 밀린 Unit 계산의 시작점)
+create or replace function mw_set_word_pos(p_student uuid, p_book int, p_unit int) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform mw_need_student(p_student);
+  if p_book is null or p_unit is null or p_book not between 1 and 999 or p_unit not between 1 and 999 then
+    raise exception '권과 Unit은 1~999 사이 숫자로 입력해 주세요.'; end if;
+  insert into mw_word_pos(student_id, book, unit, start_book, start_unit, updated_by)
+  values (p_student, p_book, p_unit, p_book, p_unit, auth.uid())
+  on conflict (student_id) do update set book = excluded.book, unit = excluded.unit, updated_by = auth.uid(), updated_at = now(),
+    start_book = case when (excluded.book, excluded.unit) < (mw_word_pos.start_book, mw_word_pos.start_unit) then excluded.book else mw_word_pos.start_book end,
+    start_unit = case when (excluded.book, excluded.unit) < (mw_word_pos.start_book, mw_word_pos.start_unit) then excluded.unit else mw_word_pos.start_unit end;
+  perform mw_log('set_word_pos', p_student, jsonb_build_object('book', p_book, 'unit', p_unit));
+end $$;
+
+-- 선생님: 학생별 현재 위치와 밀린 Unit
+create or replace function mw_word_status() returns table(student_id uuid, book int, unit int, backlog int)
+language plpgsql stable security definer set search_path = public as $$
+#variable_conflict use_column
+begin
+  perform mw_need_teacher();
+  return query select p.id, s.book, s.unit, case when s.student_id is null then 0 else mw_word_backlog(p.id) end
+    from mw_profiles p left join mw_word_pos s on s.student_id = p.id
+   where p.academy_id = mw_my_academy() and p.role = 'student' and p.active;
+end $$;
+
 -- ---------- 8. 함수 실행 권한 ----------
 do $$
 declare f record;
@@ -1234,7 +1677,9 @@ begin
     begin execute format('revoke all on function %s from authenticated', f.sig); exception when others then null; end;
     if f.proname not in ('mw_apply_xp','mw_grant_egg','mw_badge','mw_book_rewards','mw_on_signup','mw_need_teacher',
                          'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy',
-                         'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info') then
+                         'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info',
+                         'mw_seoul_today','mw_wd_idx','mw_battle_cfg','mw_battle_shards','mw_battle_day_ok','mw_battle_streak',
+                         'mw_battle_mult','mw_word_backlog','mw_word_advance','mw_battle_recheck','mw_battle_state','mw_battle_reward') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
