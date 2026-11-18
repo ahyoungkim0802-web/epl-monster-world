@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.9: 원장(관리자) 계정. 선생님 계정은 원장만 보고 바꿀 수 있음. 학원마다 가장 먼저 가입한 선생님이 원장
 -- v2.8: 선생님 계정 이름·비밀번호 변경(mw_update_teacher). 퇴사 시 계정을 새 선생님에게 넘길 때 사용
 -- v2.7: 진화 보너스. Elite·Legend로 진화하면 그 주 주간 정산의 입력할 포인트에 보너스(기본 500·1000)를 더함(XP 아님)
 -- v2.6: 진화 = 레벨 + 진화석. AR +1 → 진화석, NELT +1 → 전설석. Elite: 진화석·전설석 1개 / Legend: 전설석 1개 또는 진화석 2개
@@ -298,10 +299,23 @@ on conflict (id) do nothing;
 update mw_species set forms = replace(replace(replace(forms::text, '"Baby', '"Rookie'), '"Explorer', '"Elite'), '"Master', '"Legend')::jsonb
  where forms::text like '%"Baby%' or forms::text like '%"Explorer%' or forms::text like '%"Master%';
 
+-- v2.9: 원장(관리자) 표시. 학원마다 원장이 없으면 가장 먼저 가입한 선생님을 원장으로 지정합니다.
+alter table mw_profiles add column if not exists is_admin boolean not null default false;
+update mw_profiles p set is_admin = true
+ where p.role = 'teacher'
+   and p.id = (select t.id from mw_profiles t where t.academy_id = p.academy_id and t.role = 'teacher' order by t.created_at, t.id limit 1)
+   and not exists (select 1 from mw_profiles a where a.academy_id = p.academy_id and a.is_admin);
+
 -- ---------- 3. 권한 (Row Level Security) ----------
 create or replace function mw_my_academy() returns uuid
 language sql stable security definer set search_path = public as $$
   select academy_id from mw_profiles where id = auth.uid();
+$$;
+
+create or replace function mw_is_admin() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from mw_profiles p join mw_academies a on a.id = p.academy_id
+                  where p.id = auth.uid() and p.role = 'teacher' and p.is_admin and p.active and a.active);
 $$;
 
 create or replace function mw_is_teacher() returns boolean
@@ -335,7 +349,7 @@ drop policy if exists mw_academies_read on mw_academies;
 create policy mw_academies_read on mw_academies for select to authenticated using (id = mw_my_academy());
 drop policy if exists mw_profiles_read on mw_profiles;
 create policy mw_profiles_read on mw_profiles for select to authenticated
-  using (id = auth.uid() or (mw_is_teacher() and academy_id = mw_my_academy()));
+  using (id = auth.uid() or (mw_is_teacher() and academy_id = mw_my_academy() and (role = 'student' or mw_is_admin())));   -- 다른 선생님 계정은 원장만 봄
 drop policy if exists mw_species_read on mw_species;
 create policy mw_species_read on mw_species for select to authenticated using (true);
 drop policy if exists mw_settings_read on mw_settings;
@@ -1018,6 +1032,7 @@ language plpgsql security definer set search_path = public, extensions as $$
 declare v_name text := nullif(btrim(coalesce(p_name, '')), ''); v_pw text := nullif(coalesce(p_pw, ''), '');
 begin
   perform mw_need_teacher();
+  if not mw_is_admin() then raise exception '선생님 계정은 원장 계정에서만 바꿀 수 있습니다.'; end if;
   if not exists (select 1 from mw_profiles where id = p_id and role = 'teacher' and academy_id = mw_my_academy()) then
     raise exception '우리 학원 선생님 계정만 바꿀 수 있습니다.'; end if;
   if v_name is null and v_pw is null then raise exception '바꿀 이름이나 비밀번호를 입력해 주세요.'; end if;

@@ -384,12 +384,13 @@ const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speak
 const Demo={
   KEY:'mw_demo_v1',st:null,uid:null,
   async init(){try{this.st=JSON.parse(localStorage.getItem(this.KEY))}catch(e){} if(!this.st)this.seed();
+    for(const p of this.st.profiles)if(p.id==='t1'&&p.is_admin===undefined)p.is_admin=true;
     const D=JSON.parse(JSON.stringify(DEF_SET));this.st.set={...D,...this.st.set,activity_xp:{...D.activity_xp,...(this.st.set||{}).activity_xp}}},
   save(){try{localStorage.setItem(this.KEY,JSON.stringify(this.st))}catch(e){}},
   seed(){
     const now=Date.now(),day=864e5,iso=t=>new Date(t).toISOString();
     const st={profiles:[],monsters:[],missions:[],ledger:[],books:[],badges:[],rewards:[],audit:[],set:JSON.parse(JSON.stringify(DEF_SET))};
-    st.set.point_name='칭찬모아';st.profiles.push({id:'t1',login_id:'teacher',display_name:'김선생',role:'teacher',active:true});
+    st.set.point_name='칭찬모아';st.profiles.push({id:'t1',login_id:'teacher',display_name:'김선생',role:'teacher',active:true,is_admin:true});
     const mk=(id,name,stage,species,xp,nick,nb)=>{
       const p={id,login_id:id,display_name:name,role:'student',active:true,teacher_id:'t1',epl_stage:stage,active_monster:null,created_at:iso(now-40*day)};st.profiles.push(p);
       if(!species)return;
@@ -504,7 +505,7 @@ const Demo={
       this.st.set[a.key]=v},
     activate_student(a){this.T();const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='student');if(!p)throw new Error('학생을 찾을 수 없습니다.');p.active=a.active;if(a.name)p.display_name=a.name;p.teacher_id=p.teacher_id||this.uid},
     reset_password(){this.T()},
-    update_teacher(a){this.T();const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='teacher');if(!p)throw new Error('우리 학원 선생님 계정만 바꿀 수 있습니다.');const nm=String(a.name||'').trim(),pw=String(a.pw||'');
+    update_teacher(a){this.T();if(!this.me().is_admin)throw new Error('선생님 계정은 원장 계정에서만 바꿀 수 있습니다.');const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='teacher');if(!p)throw new Error('우리 학원 선생님 계정만 바꿀 수 있습니다.');const nm=String(a.name||'').trim(),pw=String(a.pw||'');
       if(!nm&&!pw)throw new Error('바꿀 이름이나 비밀번호를 입력해 주세요.');if(pw&&pw.length<6)throw new Error('비밀번호는 6자 이상이어야 합니다.');if(nm)p.display_name=nm.slice(0,20)},
     settle(a){this.T();const L=this.st.settle=(this.st.settle||[]).filter(x=>!(a.students.includes(x.student_id)&&x.week_start===a.start));if(a.done)for(const id of a.students)L.push({student_id:id,week_start:a.start,done_at:new Date().toISOString()})}
   },
@@ -522,7 +523,7 @@ const Demo={
     return{student_id:p.id,week_xp:L.filter(l=>new Date(l.created_at)>=ws&&l.reason!=='체험용 초기값').reduce((s,l)=>s+l.amount,0),xp_28d:L.filter(l=>new Date(l.created_at)>=d28&&l.reason!=='체험용 초기값').reduce((s,l)=>s+l.amount,0),
       books:this.st.books.filter(b=>b.student_id===p.id&&b.status==='approved').length,pending:this.st.missions.filter(m=>m.student_id===p.id&&m.status==='requested').length+this.st.books.filter(b=>b.student_id===p.id&&b.status==='requested').length}})},
   async load(){const me=this.me(),s=this.st,c=x=>JSON.parse(JSON.stringify(x));if(!me)return null;const base={me:c(me),academy:{code:'demo',name:'EPL 영어학원',active:true,max_students:100},species:c(SPECIES_SEED),set:{...c(DEF_SET),...c(s.set)}};
-    if(me.role==='teacher'){const t0=today();return{...base,profiles:c(s.profiles),monsters:c(s.monsters),missions:c(s.missions.filter(m=>['assigned','requested','rejected'].includes(m.status)||(m.decided_at&&ymd(m.decided_at)===t0))),
+    if(me.role==='teacher'){const t0=today();return{...base,profiles:c(s.profiles.filter(p=>p.role==='student'||p.id===me.id||me.is_admin)),monsters:c(s.monsters),missions:c(s.missions.filter(m=>['assigned','requested','rejected'].includes(m.status)||(m.decided_at&&ymd(m.decided_at)===t0))),
       ledger:c(s.ledger.slice().sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,300)),books:c(s.books.filter(b=>b.status==='requested')),badges:[],rewards:[],summary:this.summary()}}
     const f=k=>c(s[k].filter(x=>x.student_id===me.id));return{...base,profiles:[c(me)],monsters:f('monsters'),missions:f('missions'),ledger:f('ledger'),books:f('books'),badges:f('badges'),rewards:f('rewards'),summary:[]}},
   async loadStudent(id){this.T();const s=this.st,c=x=>JSON.parse(JSON.stringify(x)),f=k=>c(s[k].filter(x=>x.student_id===id));return{missions:f('missions').sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,50),ledger:f('ledger').sort((a,b)=>b.created_at.localeCompare(a.created_at)).slice(0,100),books:f('books'),badges:f('badges')}}
@@ -785,9 +786,9 @@ function viewTeacher(){
       <div class="mi"><div class="t"><span>학생 정원</span></div><b class="num">${W.profiles.filter(p=>p.role==='student'&&p.active).length} / ${W.academy?W.academy.max_students:'—'}</b></div>
       ${DEMO?'':`<div class="mi"><div class="t"><span>학생 접속 주소</span><b id="acUrl" style="font-weight:500;font-size:13px">${esc(location.origin+location.pathname+'?a='+(W.academy?W.academy.code:''))}</b></div><button class="btn sm" data-act="copyUrl">복사</button></div>`}
       <p class="tiny muted" style="margin-top:8px">이 주소로 들어오면 학원 코드가 미리 채워집니다. 정원 추가·이용 문의는 운영사로 연락해 주세요.</p></section>
-     <section class="card"><h3>선생님 계정 <small>${W.profiles.filter(p=>p.role==='teacher').length}명</small></h3>
+     ${W.me.is_admin?`<section class="card"><h3>선생님 계정 <small>${W.profiles.filter(p=>p.role==='teacher').length}명</small></h3>
       ${W.profiles.filter(p=>p.role==='teacher').sort((a,b)=>String(a.login_id).localeCompare(String(b.login_id))).map((p,i)=>`<div class="stack" style="gap:6px;padding:8px 0;border-bottom:1px solid var(--line,#e5e7f0)"><div class="row" style="justify-content:space-between"><span class="tiny muted">아이디 <b class="num">${esc(p.login_id)}</b>${p.id===W.me.id?' · 나':''}</span></div><div class="row"><input class="inp" id="tn_${i}" style="flex:1;min-width:110px" maxlength="20" value="${esc(p.display_name||'')}" aria-label="선생님 이름">${DEMO?'':`<input class="inp" id="tp_${i}" type="password" autocomplete="new-password" style="flex:1;min-width:130px" placeholder="새 비밀번호 (바꿀 때만)" aria-label="새 비밀번호">`}<button class="btn sm" data-act="saveTeacher" data-id="${p.id}" data-i="${i}">저장</button></div></div>`).join('')}
-      <p class="tiny muted" style="margin-top:8px">선생님이 퇴사하면 그 계정의 이름과 비밀번호를 바꿔 새 선생님에게 넘겨 주세요. 비밀번호를 바꾸면 그 계정의 기존 로그인은 끊어집니다. 아이디는 바뀌지 않습니다.</p></section>
+      <p class="tiny muted" style="margin-top:8px">선생님이 퇴사하면 그 계정의 이름과 비밀번호를 바꿔 새 선생님에게 넘겨 주세요. 비밀번호를 바꾸면 그 계정의 기존 로그인은 끊어집니다. 아이디는 바뀌지 않습니다. 이 칸은 원장 계정에만 보입니다.</p></section>`:''}
      <section class="card"><h3>XP 기준 점검 <small>최근 4주 실측</small></h3>
       <div class="kpis"><div class="kpi"><b>${avg||'—'}</b><span>학생당 주간 평균 XP</span></div><div class="kpi"><b>${wk(s.evolve_levels[0])}</b><span>첫 진화까지</span></div><div class="kpi"><b>${wk(s.max_level)}</b><span>Lv.${s.max_level}까지</span></div></div>
       <p class="tiny muted" style="margin-top:12px">활동 기록이 있는 학생 ${act.length}명 기준입니다. 첫 진화가 6~10주, 최고 레벨이 1년 안팎이 되도록 레벨당 필요 XP를 조정하는 것을 권장합니다.</p>
