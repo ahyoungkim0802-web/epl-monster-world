@@ -1322,8 +1322,17 @@ function beep(kind){if(!SND.on)return;try{const AC=window.AudioContext||window.w
   const N=kind==='ok'?[[660,0],[988,.09]]:kind==='win'?[[523,0],[659,.12],[784,.24],[1047,.38]]:[[220,0],[165,.13]];
   for(const[f,t]of N){const o=C.createOscillator(),g=C.createGain(),st=C.currentTime+t,len=kind==='win'&&t>.3?.5:.22;o.type=kind==='no'?'square':'triangle';o.frequency.value=f;
     g.gain.setValueAtTime(.0001,st);g.gain.exponentialRampToValueAtTime(kind==='no'?.08:.22,st+.02);g.gain.exponentialRampToValueAtTime(.0001,st+len);o.connect(g);g.connect(C.destination);o.start(st);o.stop(st+len+.05)}}catch(e){}}
-function say(t,delay=0){if(!SND.on||!t||!window.speechSynthesis)return;const go=()=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.85;
-  const vs=speechSynthesis.getVoices(),v=vs.find(x=>/^en[-_]US/i.test(x.lang))||vs.find(x=>/^en/i.test(x.lang));if(v)u.voice=v;speechSynthesis.speak(u)}catch(e){}};delay?setTimeout(go,delay):go()}
+function say(t,delay=0){if(!SND.on||!t||!window.speechSynthesis)return;const go=()=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.9;
+  const v=bestVoice();if(v){u.voice=v;u.lang=v.lang}u.pitch=1;speechSynthesis.speak(u)}catch(e){}};delay?setTimeout(go,delay):go()}
+/* 원어민 목소리 고르기: 장난용 목소리(Whisper·Bad News 등)는 빼고, 자연스러운 목소리를 먼저 */
+const VOICE_BAD=/albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|organ|superstar|trinoids|whisper|wobble|zarvox|ralph|fred|kathy|princess|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|novelty/i;
+const VOICE_GOOD=[/natural/i,/neural/i,/premium/i,/enhanced/i,/google us english/i,/\b(ava|samantha|allison|susan|zoe|nicky|evan|nathan|tom|joelle|noelle)\b/i,/\b(aria|jenny|guy|michelle|ana|emma|brian|andrew)\b/i,/google uk english/i,/\b(daniel|karen|serena|moira|kate|oliver)\b/i];
+let _voice=null,_voiceN=-1;
+function bestVoice(){const vs=speechSynthesis.getVoices()||[];if(_voice&&vs.length===_voiceN)return _voice;_voiceN=vs.length;
+  const en=vs.filter(x=>/^en[-_]/i.test(x.lang)&&!VOICE_BAD.test(x.name));
+  const score=x=>{let k=0;VOICE_GOOD.forEach((r,i)=>{if(r.test(x.name))k+=100-i*8});if(/^en[-_]US/i.test(x.lang))k+=30;else if(/^en[-_](GB|AU|CA)/i.test(x.lang))k+=15;if(x.localService)k+=3;return k};
+  _voice=en.sort((a,b)=>score(b)-score(a))[0]||null;return _voice}
+try{if(window.speechSynthesis){speechSynthesis.getVoices();speechSynthesis.addEventListener&&speechSynthesis.addEventListener('voiceschanged',()=>{_voiceN=-1})}}catch(e){}
 function duSayQ(){const q=UI.duel&&UI.duel.q;if(q&&q.t==='listen')say(q.say);else if(q&&q.t==='mc')say(q.prompt)}
 function sayQ(){const q=UI.bt&&UI.bt.q;if(!q)return;if(q.t==='listen')say(q.say);else if(q.t==='mc')say(q.prompt)}
 async function btSend(answer){if(UI.btBusy||!UI.bt||!UI.bt.q)return;UI.btBusy=true;const q=UI.bt.q;
