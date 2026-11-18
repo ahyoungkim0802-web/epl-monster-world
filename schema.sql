@@ -3,6 +3,7 @@
 -- v2.2: 칭찬모아 기준(출석·태도·AR·NELT 등, 차감 포함), 선생님이 활동 목록을 직접 편집, 1000 XP = 1레벨
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
+-- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
 -- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
@@ -225,7 +226,9 @@ begin
     "self_report_acts": ["vocab","textbook","bookwriting","bookquiz","homework"],
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
-    "reading_milestones": [{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
+    "activity_stats": {"reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
+    "stat_rewards": [{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
+    "reading_milestones": [{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
     if not exists (select 1 from mw_settings where academy_id is null and key = d.key) then
       insert into mw_settings(academy_id, key, value) values (null, d.key, d.value);
@@ -238,6 +241,10 @@ update mw_settings set value = '{"bookwriting":30,"bookquiz":30}'::jsonb || valu
  where key = 'activity_xp' and not (value ? 'bookwriting' and value ? 'bookquiz');
 update mw_settings set value = '{"bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과"}'::jsonb || value
  where key = 'activity_labels' and academy_id is null and not (value ? 'bookwriting' and value ? 'bookquiz');
+-- v2.5: 원서 10·30권 보상을 알 → 배지로 (알은 이제 스탯 목표에서 나옴). 예전 기본값 그대로인 경우만 변경
+update mw_settings set value = '[{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]'::jsonb
+ where key = 'reading_milestones' and value = '[{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]'::jsonb;
+
 -- v2.2 보충: 칭찬모아 활동의 기본 XP·이름 추가 (이미 있는 값은 유지)
 update mw_settings set value = '{"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100}'::jsonb || value
  where key = 'activity_xp' and not (value ? 'nelt');
@@ -269,6 +276,15 @@ insert into mw_species(id, name, animal, concept, rarity, season, sort, art, for
  ('aurorix','AURORIX','오로라 사슴','통찰과 품격','rare',null,21,
   '{"body":"#F5A995","belly":"#FFF1EA","accent":"#7FD1C2","dark":"#B86B58","ears":"antler","tail":"puff","mark":"star"}',
   '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Aurorix"},{"stage":2,"stage_name":"Elite","form_name":"Elite Aurorix"},{"stage":3,"stage_name":"Legend","form_name":"Legend Aurorix"}]'),
+ ('lexi','LEXI','글자 다람쥐','어휘와 기억','common',null,13,
+  '{"body":"#E9C46A","belly":"#FFF6DA","accent":"#C9772B","dark":"#8A5320","ears":"cat","tail":"fox","mark":"leaf"}',
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Lexi"},{"stage":2,"stage_name":"Elite","form_name":"Elite Lexi"},{"stage":3,"stage_name":"Legend","form_name":"Legend Lexi"}]'),
+ ('runex','RUNEX','룬 비룡','언어의 힘','rare',null,22,
+  '{"body":"#3E8E8A","belly":"#E2F4EF","accent":"#E3B341","dark":"#21534F","ears":"horn","tail":"fox","mark":"star"}',
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Runex"},{"stage":2,"stage_name":"Elite","form_name":"Elite Runex"},{"stage":3,"stage_name":"Legend","form_name":"Legend Runex"}]'),
+ ('terron','TERRON','바위 거북','불굴의 의지','rare',null,23,
+  '{"body":"#7D8B6A","belly":"#EEF0E2","accent":"#C46A3A","dark":"#4A5540","ears":"round","tail":"none","mark":"stone"}',
+  '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Terron"},{"stage":2,"stage_name":"Elite","form_name":"Elite Terron"},{"stage":3,"stage_name":"Legend","form_name":"Legend Terron"}]'),
  ('frostie','FROSTIE','눈꽃 여우새','겨울 시즌 한정','seasonal','winter',30,
   '{"body":"#EAF2FA","belly":"#FFFFFF","accent":"#9CC3E8","dark":"#6C93BD","ears":"cat","tail":"fox","mark":"snow"}',
   '[{"stage":1,"stage_name":"Rookie","form_name":"Rookie Frostie"},{"stage":2,"stage_name":"Elite","form_name":"Elite Frostie"},{"stage":3,"stage_name":"Legend","form_name":"Legend Frostie"}]')
@@ -451,7 +467,55 @@ begin
       perform mw_grant_egg(p_student, 'common', 'Lv.MAX 달성');
     end if;
   end if;
+  if p_kind = 'grant' and p_amount > 0 then perform mw_stat_rewards(p_student); end if;   -- 스탯 목표 달성 몬스터
   return v_lvl;
+end $$;
+
+-- 스탯: 취소되지 않은 지급 XP(양수)를 활동별 스탯(activity_stats)으로 합산. 차감·정정은 넣지 않음. Demo.statValues 와 같은 규칙
+create or replace function mw_stat_values(p_student uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  with cfg as (select coalesce(mw_setting(p.academy_id, 'activity_stats'), '{}'::jsonb) as m from mw_profiles p where p.id = p_student)
+  select coalesce(jsonb_object_agg(k, v), '{}'::jsonb) from (
+    select cfg.m ->> l.reason as k, sum(l.amount)::int as v
+      from mw_ledger l, cfg
+     where l.student_id = p_student and l.kind = 'grant' and l.amount > 0 and cfg.m ? l.reason
+       and not exists (select 1 from mw_ledger r where r.student_id = l.student_id and r.kind = 'revoke'
+                        and ((l.mission_id is not null and r.mission_id = l.mission_id)
+                          or (l.book_id is not null and r.book_id = l.book_id)))
+     group by 1) t;
+$$;
+
+-- 정해진 몬스터 알 지급. 이미 가진 몬스터면 같은 등급의 다른 미보유 몬스터로 대신 지급
+create or replace function mw_grant_species(p_student uuid, p_species text, p_source text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_rar text;
+begin
+  select rarity into v_rar from mw_species where id = p_species and enabled;
+  if v_rar is not null and not exists (select 1 from mw_monsters where student_id = p_student and species_id = p_species) then
+    insert into mw_monsters(student_id, species_id, hatched, source) values (p_student, p_species, false, p_source) returning id into v_id;
+    return v_id;
+  end if;
+  return mw_grant_egg(p_student, coalesce(v_rar, 'common'), p_source);
+end $$;
+
+-- 스탯 목표(stat_rewards) 달성 시 몬스터 알을 한 번씩 지급. Demo.statRewards 와 같은 규칙
+create or replace function mw_stat_rewards(p_student uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid; v_st jsonb; r jsonb; v_key text;
+begin
+  select academy_id into v_ac from mw_profiles where id = p_student;
+  v_st := mw_stat_values(p_student);
+  for r in select * from jsonb_array_elements(coalesce(mw_setting(v_ac, 'stat_rewards'), '[]'::jsonb)) loop
+    if coalesce((v_st ->> (r ->> 'stat'))::int, 0) >= (r ->> 'at')::int then
+      v_key := 'stat:' || (r ->> 'stat') || ':' || (r ->> 'at');
+      if not exists (select 1 from mw_rewards where student_id = p_student and reward_key = v_key) then
+        insert into mw_rewards(student_id, reward_key) values (p_student, v_key);
+        perform mw_grant_species(p_student, r ->> 'species',
+          case r ->> 'stat' when 'read' then '독해' when 'write' then '작문' when 'vocab' then '어휘' when 'grit' then '성실' else r ->> 'stat' end
+          || ' ' || to_char((r ->> 'at')::int, 'FM999,999,990') || ' 달성');
+      end if;
+    end if;
+  end loop;
 end $$;
 
 -- 학원 만들기 / 학원 상태 변경 — SQL Editor 에서만 실행 가능(앱에서는 호출 불가)
@@ -577,6 +641,14 @@ begin
     raise exception '이미 등록한 책입니다.'; end if;
   insert into mw_books(student_id, title, title_key) values (auth.uid(), v_title, mw_title_key(v_title)) returning id into v_id;
   return v_id;
+end $$;
+
+-- 스탯 조회: 본인 또는 우리 학원 선생님만
+create or replace function mw_stats(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not ((p_student = auth.uid() and mw_student_ok()) or mw_same(p_student)) then raise exception '볼 수 없는 학생입니다.'; end if;
+  return mw_stat_values(p_student);
 end $$;
 
 -- 마을 지도: 내 학원 활성 학생의 이름·레벨·대표 몬스터만 돌려줍니다(XP·기록 등 다른 정보는 공개하지 않음).
@@ -798,14 +870,20 @@ begin
   perform mw_apply_xp(p_student, v_mon, p_amount, 'adjust', left(p_reason, 200), null, null);
 end $$;
 
-create or replace function mw_gift_egg(p_student uuid, p_species text) returns void
+-- 선생님 선물: 시즌 한정 몬스터만, 사유 필수(학생 도감에 획득 경로로 표시). Demo.F.gift_egg 와 같은 규칙
+drop function if exists mw_gift_egg(uuid, text);
+create or replace function mw_gift_egg(p_student uuid, p_species text, p_reason text) returns void
 language plpgsql security definer set search_path = public as $$
 begin
   perform mw_need_student(p_student);
+  if char_length(btrim(coalesce(p_reason, ''))) < 2 then raise exception '선물 사유를 입력해 주세요.'; end if;
+  if not exists (select 1 from mw_species where id = p_species and rarity = 'seasonal' and enabled) then
+    raise exception '선생님 선물은 시즌 한정 몬스터만 가능합니다.'; end if;
   if exists (select 1 from mw_monsters where student_id = p_student and species_id = p_species) then
     raise exception '이미 가지고 있는 몬스터입니다.'; end if;
-  insert into mw_monsters(student_id, species_id, hatched, source) values (p_student, p_species, false, '선생님 선물');
-  perform mw_log('gift_egg', p_student, jsonb_build_object('species', p_species));
+  insert into mw_monsters(student_id, species_id, hatched, source)
+  values (p_student, p_species, false, '선생님 선물 · ' || left(btrim(p_reason), 40));
+  perform mw_log('gift_egg', p_student, jsonb_build_object('species', p_species, 'reason', left(btrim(p_reason), 40)));
 end $$;
 
 create or replace function mw_set_setting(p_key text, p_value jsonb) returns void
@@ -814,7 +892,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -827,6 +905,16 @@ begin
        select 1 from jsonb_array_elements(p_value) e
         where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[a-z0-9_]{1,24}$')) then
     raise exception '활동 목록 형식이 올바르지 않습니다.'; end if;
+  if p_key = 'activity_stats' and (jsonb_typeof(p_value) <> 'object' or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key !~ '^[a-z0-9_]{1,24}$' or jsonb_typeof(e.value) <> 'string' or (e.value #>> '{}') not in ('read','write','vocab','grit'))) then
+    raise exception '활동별 스탯 설정이 올바르지 않습니다.'; end if;
+  if p_key = 'stat_rewards' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) > 24 or exists (
+       select 1 from jsonb_array_elements(p_value) e
+        where jsonb_typeof(e) <> 'object' or coalesce(e ->> 'stat', '') not in ('read','write','vocab','grit')
+           or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
+           or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
+    raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
   if p_key = 'map_name_mode' and (jsonb_typeof(p_value) <> 'string' or (p_value #>> '{}') not in ('nickname','masked','real','hidden')) then
     raise exception '이름 표시 방식이 올바르지 않습니다.'; end if;
   if p_key = 'map_zones' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) not between 1 and 8 or exists (
@@ -914,7 +1002,8 @@ begin
     begin execute format('revoke all on function %s from anon', f.sig); exception when others then null; end;
     begin execute format('revoke all on function %s from authenticated', f.sig); exception when others then null; end;
     if f.proname not in ('mw_apply_xp','mw_grant_egg','mw_badge','mw_book_rewards','mw_on_signup','mw_need_teacher',
-                         'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy') then
+                         'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy',
+                         'mw_stat_values','mw_stat_rewards','mw_grant_species') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
