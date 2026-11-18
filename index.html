@@ -110,6 +110,7 @@ body.busy [data-act]{pointer-events:none;opacity:.7}
 .wmap{width:100%;max-width:560px;height:auto;display:block;margin:0 auto;border-radius:16px}
 .wmap .zl{font-family:var(--display);font-size:14px;font-weight:700;fill:#28314B;paint-order:stroke;stroke:#FFF8E7;stroke-width:4px;stroke-linejoin:round}
 .wmap .zk{font-size:10.5px;font-weight:600;fill:#4A4033;paint-order:stroke;stroke:#FFF8E7;stroke-width:3px;stroke-linejoin:round}
+.buy2{display:flex;flex-direction:column;gap:4px;width:100%}.buy2 .btn{width:100%}.btn.xpb{background:#EFE9FF;color:#4B3A8C;border-color:#CFC3F5}
 .wmap .mk{cursor:pointer}.wmap .mkn{font-size:9.5px;font-weight:700;fill:#28314B;paint-order:stroke;stroke:#FFF8E7;stroke-width:3px;stroke-linejoin:round}
 .wmap .mkme{font-size:10.5px;font-weight:700;fill:#fff}
 
@@ -615,6 +616,7 @@ const Demo={
   // ---- 코인(서버 mw_coin_* 과 같은 규칙) ----
   cCfg(){return{...JSON.parse('{"activity":5,"battle_first":10,"battle_rewin":2,"gate_first":30,"streak":20,"evo_elite":50,"evo_legend":100}'),...(this.st.set.coins||{})}},
   coinBal(s){return this.st.coins.filter(c=>c.student_id===s).reduce((a,c)=>a+c.amount,0)},
+  xpWallet(s){const got=this.st.ledger.filter(l=>l.student_id===s).reduce((a,l)=>a+l.amount,0),used=(this.st.xpSpend||[]).filter(x=>x.student_id===s).reduce((a,x)=>a+x.amount,0);return Math.max(0,got-used)},
   coinAdd(s,amt,reason,ref){if(!(amt>0))return;if(ref&&this.st.coins.some(c=>c.student_id===s&&c.ref===ref))return;this.st.coins.push({student_id:s,amount:amt,reason,ref,created_at:new Date().toISOString()})},
   coinRevoke(s,ref,reason){const c=this.st.coins.find(x=>x.student_id===s&&x.ref===ref&&x.amount>0);if(c&&!this.st.coins.some(x=>x.student_id===s&&x.ref===ref+':rv'))this.st.coins.push({student_id:s,amount:-c.amount,reason,ref:ref+':rv',created_at:new Date().toISOString()})},
   coinOnApprove(s,act,ref){const c=this.cCfg();this.coinAdd(s,c.activity,'활동 승인',ref);const i=this.streakInfo(s)[act];if(i)for(let k=1;k<=i.earned;k++)this.coinAdd(s,c.streak,'연속 '+i.days+'일 달성','st:'+act+':'+k)},
@@ -756,12 +758,14 @@ const Demo={
     update_teacher(a){this.T();if(!this.me().is_admin)throw new Error('선생님 계정은 원장 계정에서만 바꿀 수 있습니다.');const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='teacher');if(!p)throw new Error('우리 학원 선생님 계정만 바꿀 수 있습니다.');const nm=String(a.name||'').trim(),pw=String(a.pw||'');
       if(!nm&&!pw)throw new Error('바꿀 이름이나 비밀번호를 입력해 주세요.');if(pw&&pw.length<6)throw new Error('비밀번호는 6자 이상이어야 합니다.');if(nm)p.display_name=nm.slice(0,20)},
     // ---- 상점·집 ----
-    shop(){const p=this.stu(),inv=this.st.inv.filter(v=>v.student_id===p.id);return{coins:this.coinBal(p.id),level:this.maxLv(p.id),items:SHOP_SEED.map(i=>({...i,owned:(inv.find(v=>v.item_id===i.id)||{}).qty||(i.price===0?1:0)}))}},
+    shop(){const p=this.stu(),inv=this.st.inv.filter(v=>v.student_id===p.id);return{coins:this.coinBal(p.id),xp:this.xpWallet(p.id),xp_rate:10,level:this.maxLv(p.id),items:SHOP_SEED.map(i=>({...i,owned:(inv.find(v=>v.item_id===i.id)||{}).qty||(i.price===0?1:0)}))}},
     buy(a){const p=this.stu(),it=SHOP_SEED.find(i=>i.id===a.item);if(!it)throw new Error('살 수 없는 물건입니다.');if(this.maxLv(p.id)<it.min_level)throw new Error(`Lv.${it.min_level}부터 살 수 있어요.`);
       const v=this.st.inv.find(x=>x.student_id===p.id&&x.item_id===it.id),has=v?v.qty:0;if((it.kind!=='furniture'&&(has>0||it.price===0))||has>=9)throw new Error('이미 가지고 있어요.');
-      const bal=this.coinBal(p.id);if(bal<it.price)throw new Error(`코인이 부족해요. (${bal} / ${it.price})`);if(it.price>0)this.st.coins.push({student_id:p.id,amount:-it.price,reason:it.name+' 구매',ref:'buy:'+uuid(),created_at:new Date().toISOString()});
-      if(v)v.qty++;else this.st.inv.push({student_id:p.id,item_id:it.id,qty:1});return{coins:this.coinBal(p.id)}},
-    home(){const p=this.stu(),h=this.st.homes.find(x=>x.student_id===p.id)||{};return{wall:h.wall||'wall_cream',floor:h.floor||'floor_wood',layout:JSON.parse(JSON.stringify(h.layout||[])),inventory:Object.fromEntries(this.st.inv.filter(v=>v.student_id===p.id).map(v=>[v.item_id,v.qty])),coins:this.coinBal(p.id),stickers:this.stkCount(p.id),today:this.st.stickers.filter(x=>x.to===p.id&&x.day===today()).slice().reverse().map(x=>({kind:x.kind,name:this.pubName(x.from)})),visit:this.visitOk()}},
+      const pay=a.pay||'coin';if(!['coin','xp'].includes(pay))throw new Error('결제 방법이 올바르지 않습니다.');
+      if(pay==='xp'&&it.price>0){const need=it.price*10,bal=this.xpWallet(p.id);if(bal<need)throw new Error(`XP가 부족해요. (${bal} / ${need})`);(this.st.xpSpend=this.st.xpSpend||[]).push({student_id:p.id,item_id:it.id,amount:need,created_at:new Date().toISOString()})}
+      else{const bal=this.coinBal(p.id);if(bal<it.price)throw new Error(`코인이 부족해요. (${bal} / ${it.price})`);if(it.price>0)this.st.coins.push({student_id:p.id,amount:-it.price,reason:it.name+' 구매',ref:'buy:'+uuid(),created_at:new Date().toISOString()})}
+      if(v)v.qty++;else this.st.inv.push({student_id:p.id,item_id:it.id,qty:1});return{coins:this.coinBal(p.id),xp:this.xpWallet(p.id)}},
+    home(){const p=this.stu(),h=this.st.homes.find(x=>x.student_id===p.id)||{};return{wall:h.wall||'wall_cream',floor:h.floor||'floor_wood',layout:JSON.parse(JSON.stringify(h.layout||[])),inventory:Object.fromEntries(this.st.inv.filter(v=>v.student_id===p.id).map(v=>[v.item_id,v.qty])),coins:this.coinBal(p.id),xp:this.xpWallet(p.id),stickers:this.stkCount(p.id),today:this.st.stickers.filter(x=>x.to===p.id&&x.day===today()).slice().reverse().map(x=>({kind:x.kind,name:this.pubName(x.from)})),visit:this.visitOk()}},
     home_save(a){const p=this.stu(),own=id=>{const i=SHOP_SEED.find(x=>x.id===id);return i&&(i.price===0||this.st.inv.some(v=>v.student_id===p.id&&v.item_id===id))};
       if(!(own(a.wall)&&SHOP_SEED.find(x=>x.id===a.wall).kind==='wall'&&own(a.floor)&&SHOP_SEED.find(x=>x.id===a.floor).kind==='floor'))throw new Error('가지고 있는 벽지·바닥만 쓸 수 있어요.');
       if(!Array.isArray(a.layout)||a.layout.length>48)throw new Error('배치가 올바르지 않습니다.');const cnt={},pos=new Set();
@@ -1451,7 +1455,7 @@ function viewDuel(){const D=UI.duel,fb=UI.duFb;if(!D)return '<div class="empty">
   else if(D.my_done)mid=`<section class="card stack" style="text-align:center"><h2 style="font-size:22px">다 풀었어요!</h2><p>내 점수 <b class="num">${D.my_score}</b> · 맞힌 개수 ${D.my_correct}/${D.total}</p><p class="muted">${esc(D.other)}가 풀면 결과가 나와요. (${fmtD(D.expires_at)}까지, 안 하면 취소돼요)</p><button class="btn" data-act="duExit">돌아가기</button></section>`;
   return `<div class="stack">${head}${mid}</div>`}
 function viewHouse(){const H=UI.home,S=UI.shop,v=UI.hv||'home',mons=W.monsters.filter(m=>m.hatched).slice(0,6);
-  const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px">${[['home','내 집'],['shop','상점'],['edit','꾸미기'],...(H&&H.visit?[['friends','친구 집']]:[])].map(([k,l])=>`<button class="ck ${v===k?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div><span class="coin">🪙 ${H?H.coins.toLocaleString():'…'}</span></div>`;
+  const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px">${[['home','내 집'],['shop','상점'],['edit','꾸미기'],...(H&&H.visit?[['friends','친구 집']]:[])].map(([k,l])=>`<button class="ck ${v===k?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div><span class="row" style="gap:6px"><span class="coin">🪙 ${H?H.coins.toLocaleString():'…'}</span><span class="coin" title="쓸 수 있는 XP (써도 레벨은 그대로)">✨ ${H?(H.xp||0).toLocaleString():'…'} XP</span></span></div>`;
   if(!H||!S)return `<div class="stack">${top}<div class="empty">불러오는 중…</div></div>`;
   const stkLine=o=>Object.entries(STICKERS).filter(([k])=>o&&o[k]).map(([k,[e]])=>`<span class="pill">${e} ${o[k]}</span>`).join(' ');
   if(v==='duel')return `<div class="stack">${viewDuel()}</div>`;
@@ -1480,10 +1484,10 @@ function viewHouse(){const H=UI.home,S=UI.shop,v=UI.hv||'home',mons=W.monsters.f
     const btn=acc&&own?(act&&act.acc===i.id?`<button class="btn sm" data-act="hEquip" data-id="">벗기기</button>`:`<button class="btn sm p" data-act="hEquip" data-id="${i.id}">씌우기</button>`)
       :own&&i.kind!=='furniture'?'<span class="pill ok">가지고 있음</span>'
       :lock?`<span class="pill gray">🔒 Lv.${i.min_level}부터</span>`
-      :`<button class="btn sm p" data-act="hBuy" data-id="${i.id}" ${H.coins<i.price?'disabled':''}>🪙 ${i.price}</button>`;
+      :`<div class="buy2"><button class="btn sm p" data-act="hBuy" data-id="${i.id}" data-pay="coin" ${H.coins<i.price?'disabled':''}>🪙 ${i.price}</button><button class="btn sm xpb" data-act="hBuy" data-id="${i.id}" data-pay="xp" ${(H.xp||0)<i.price*10?'disabled':''}>✨ ${(i.price*10).toLocaleString()} XP</button></div>`;
     return `<div class="sitem ${own?'own':''}">${pv}<b>${esc(i.name)}</b>${i.kind==='furniture'&&own?`<span class="tiny muted">${i.owned}개 가짐</span>`:''}${btn}</div>`}).join('');
   return `<div class="stack">${top}<div class="row" style="gap:6px;flex-wrap:wrap">${[['furniture','가구'],['wall','벽지'],['floor','바닥'],['acc','액세서리']].map(([k,l])=>`<button class="ck ${cat===k?'on':''}" data-act="sCat" data-v="${k}">${l}</button>`).join('')}</div>
-    <div class="shop">${cards}</div><p class="tiny muted">액세서리는 대표 몬스터에게 씌워집니다.</p></div>`}
+    <div class="shop">${cards}</div><p class="tiny muted">액세서리는 대표 몬스터에게 씌워집니다. ✨ XP로 사도 레벨은 내려가지 않아요. (받은 XP만큼 쓸 수 있어요)</p></div>`}
 async function refresh(){W=await api.load();if(W&&W.set)buildAct(W.set);if(W&&W.me&&W.me.role==='student'&&W.me.active){try{W.stats=await api.rpc('stats',{student:W.me.id})||{}}catch(e){W.stats={}}try{W.stones=await api.rpc('stones',{student:W.me.id})||{}}catch(e){W.stones={}}try{W.streaks=await api.rpc('streaks',{student:W.me.id})||{}}catch(e){W.streaks={}}W.duels=[];if(W.set.duel&&W.set.duel.on&&W.set.home_visit!==false)try{W.duels=await api.rpc('duels')||[]}catch(e){}
     const pv=UI.stones;if(pv&&((W.stones.evo||0)>(pv.evo||0)||(W.stones.legend||0)>(pv.legend||0)))setTimeout(()=>toast('새 진화석을 얻었습니다. 진화할 수 있는지 확인해 보세요.'),300);UI.stones=W.stones}if(W&&W.me&&W.me.role==='teacher'&&W.me.active){try{W.teachers=await api.rpc('teacher_names')||[]}catch(e){W.teachers=[]}try{W.wordStatus=await api.rpc('word_status')||[]}catch(e){W.wordStatus=[]}}if(W&&W.me&&W.me.role==='teacher'&&W.me.active&&UI.ttab==='weekly')await loadWeekly();render()}
 function render(){
@@ -1523,7 +1527,7 @@ const A={
     if(!UI.hSel)return;const inv=(UI.home.inventory||{})[UI.hSel]||0,used=E.layout.filter(e=>e.i===UI.hSel).length;if(used>=inv)return toast('가진 개수를 모두 놓았어요.',true);E.layout.push({i:UI.hSel,x,y});render()},
   hWall(d){UI.hEdit.wall=d.id;render()},hFloor(d){UI.hEdit.floor=d.id;render()},
   async hSave(){const E=UI.hEdit;try{await api.rpc('home_save',{wall:E.wall,floor:E.floor,layout:E.layout});await loadHouse();UI.hv='home';toast('집을 저장했어요.');render()}catch(e){toast(e.message,true)}},
-  async hBuy(d){try{await api.rpc('buy',{item:d.id});await loadHouse();beep('ok');toast('샀어요! 꾸미기에서 놓아 보세요.');render()}catch(e){toast(e.message,true)}},
+  async hBuy(d){try{await api.rpc('buy',{item:d.id,pay:d.pay||'coin'});await loadHouse();beep('ok');toast('샀어요! 꾸미기에서 놓아 보세요.');render()}catch(e){toast(e.message,true)}},
   async hEquip(d){const m=myActive();if(!m)return;try{await api.rpc('equip',{monster:m.id,item:d.id||null});await refresh();await loadHouse();toast(d.id?'씌웠어요!':'벗겼어요.');render()}catch(e){toast(e.message,true)}},
   dexF(d){UI.dexF=d.v;render()},
   daN(){UI.daN=!UI.daN;render()},
