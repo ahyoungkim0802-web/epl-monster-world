@@ -1,0 +1,810 @@
+-- =====================================================================
+-- MONSTER WORLD · 데이터베이스 v2.0  (Supabase / PostgreSQL) — 여러 학원용
+-- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
+-- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
+--
+-- 원칙
+--  1) 모든 테이블은 mw_ 로 시작합니다(기존 프로젝트의 다른 테이블과 섞이지 않음).
+--  2) 클라이언트는 테이블에 직접 쓰지 못합니다. 모든 변경은 아래 함수(RPC)로만 처리합니다.
+--  3) 학원 간 데이터는 서버에서 분리됩니다. 선생님은 자기 학원 학생만 보고 승인할 수 있습니다.
+-- =====================================================================
+
+-- ---------- 1. 테이블 ----------
+create table if not exists mw_academies (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null check (code ~ '^[a-z0-9]{3,12}$'),   -- 학원 코드(로그인에 사용)
+  name text not null,
+  active boolean not null default true,          -- false 로 바꾸면 해당 학원 이용 중지
+  max_students int not null default 100,         -- 활성 학생 정원(요금제용)
+  created_at timestamptz not null default now()
+);
+
+create table if not exists mw_academy_secrets (   -- 클라이언트에서 절대 읽을 수 없음
+  academy_id uuid primary key references mw_academies(id) on delete cascade,
+  teacher_code text not null
+);
+
+create table if not exists mw_profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  academy_id uuid references mw_academies(id),
+  login_id text not null,
+  display_name text not null default '',
+  role text not null default 'student' check (role in ('student','teacher')),
+  active boolean not null default false,
+  teacher_id uuid references mw_profiles(id),
+  epl_stage text not null default '',
+  active_monster uuid,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists mw_species (           -- 몬스터 종류는 모든 학원이 공유
+  id text primary key,
+  name text not null,
+  animal text not null default '',
+  concept text not null default '',
+  rarity text not null default 'common' check (rarity in ('starter','common','rare','seasonal')),
+  season text,
+  enabled boolean not null default true,
+  sort int not null default 0,
+  art jsonb not null default '{}'::jsonb,      -- 임시 아트(SVG) 설정: 색상·귀·꼬리·문양
+  forms jsonb not null default '[]'::jsonb,    -- 진화 형태: [{stage,stage_name,form_name,image_url}]
+  branches jsonb                               -- 향후 진화 분기용 (현재 미사용)
+);
+
+create table if not exists mw_monsters (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  species_id text not null references mw_species(id),
+  nickname text not null default '',
+  xp int not null default 0 check (xp >= 0),
+  level int not null default 1,
+  stage int not null default 1,
+  seen_level int not null default 1,
+  seen_stage int not null default 1,
+  hatched boolean not null default false,
+  branch text,
+  source text not null default '',
+  obtained_at timestamptz not null default now(),
+  hatched_at timestamptz,
+  unique (student_id, species_id)
+);
+
+create table if not exists mw_missions (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  activity text not null,
+  title text not null default '',
+  xp int not null check (xp between 0 and 500),
+  due_date date not null default current_date,
+  status text not null default 'assigned'
+    check (status in ('assigned','requested','approved','rejected','revoked','cancelled')),
+  batch_id uuid,
+  monster_id uuid references mw_monsters(id),
+  created_by uuid references mw_profiles(id),
+  created_at timestamptz not null default now(),
+  requested_at timestamptz,
+  decided_by uuid references mw_profiles(id),
+  decided_at timestamptz,
+  note text,
+  unique (student_id, batch_id)   -- 같은 배정/지급 버튼을 두 번 눌러도 한 번만 생성
+);
+create index if not exists mw_missions_student on mw_missions(student_id, status);
+
+create table if not exists mw_books (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  title text not null,
+  title_key text not null,
+  book_level text,            -- 향후: AR/Lexile 등 난이도
+  comprehension int,          -- 향후: 이해도 평가(0~100)
+  status text not null default 'requested'
+    check (status in ('requested','approved','rejected','revoked')),
+  monster_id uuid references mw_monsters(id),
+  created_at timestamptz not null default now(),
+  decided_by uuid references mw_profiles(id),
+  decided_at timestamptz,
+  note text,
+  unique (student_id, title_key)  -- 같은 책 반복 등록 방지
+);
+
+create table if not exists mw_ledger (            -- XP 거래 내역 (수정·삭제 없음, 정정은 새 행으로)
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  monster_id uuid not null references mw_monsters(id) on delete cascade,
+  amount int not null,
+  kind text not null check (kind in ('grant','revoke','adjust')),
+  reason text not null default '',
+  mission_id uuid references mw_missions(id),
+  book_id uuid references mw_books(id),
+  level_after int not null default 1,
+  actor uuid references mw_profiles(id),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists mw_ledger_mission_once on mw_ledger(mission_id, kind) where mission_id is not null;
+create unique index if not exists mw_ledger_book_once on mw_ledger(book_id, kind) where book_id is not null;
+create index if not exists mw_ledger_student on mw_ledger(student_id, created_at desc);
+
+create table if not exists mw_badges (
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  badge_id text not null,
+  earned_at timestamptz not null default now(),
+  primary key (student_id, badge_id)
+);
+
+create table if not exists mw_rewards (           -- 보상 지급 기록(중복 지급 방지)
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  reward_key text not null,
+  granted_at timestamptz not null default now(),
+  primary key (student_id, reward_key)
+);
+
+create table if not exists mw_settings (          -- academy_id 가 비어 있으면 전체 기본값
+  academy_id uuid references mw_academies(id) on delete cascade,
+  key text not null,
+  value jsonb not null,
+  updated_by uuid,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists mw_settlements (       -- 주간 포인트 입력 완료 표시
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  week_start date not null,
+  done_by uuid references mw_profiles(id),
+  done_at timestamptz not null default now(),
+  primary key (student_id, week_start)
+);
+
+create table if not exists mw_audit (             -- 변경 이력
+  id bigint generated always as identity primary key,
+  academy_id uuid,
+  actor uuid,
+  action text not null,
+  target uuid,
+  detail jsonb not null default '{}'::jsonb,
+  at timestamptz not null default now()
+);
+
+-- ---------- 1-2. v1(단일 학원)에서 올라오는 경우의 구조 변경 ----------
+alter table mw_profiles add column if not exists academy_id uuid references mw_academies(id);
+alter table mw_profiles drop constraint if exists mw_profiles_login_id_key;
+alter table mw_profiles drop constraint if exists mw_profiles_epl_stage_check;
+alter table mw_profiles alter column epl_stage set default '';
+create unique index if not exists mw_profiles_login on mw_profiles(academy_id, login_id);
+alter table mw_settings add column if not exists academy_id uuid references mw_academies(id) on delete cascade;
+alter table mw_settings drop constraint if exists mw_settings_pkey;
+create unique index if not exists mw_settings_uk
+  on mw_settings(coalesce(academy_id, '00000000-0000-0000-0000-000000000000'::uuid), key);
+alter table mw_audit add column if not exists academy_id uuid;
+
+do $$   -- v1 데이터가 있으면 'epl' 학원으로 묶음
+declare v_ac uuid; v_code text;
+begin
+  if exists (select 1 from mw_profiles where academy_id is null) then
+    insert into mw_academies(code, name) values ('epl', 'EPL 영어학원') on conflict (code) do nothing;
+    select id into v_ac from mw_academies where code = 'epl';
+    update mw_profiles set academy_id = v_ac where academy_id is null;
+    if to_regclass('public.mw_secrets') is not null then
+      execute 'select value from mw_secrets where key = ''teacher_code''' into v_code;
+    end if;
+    insert into mw_academy_secrets(academy_id, teacher_code) values (v_ac, coalesce(v_code, 'EPL-CHANGE-ME'))
+    on conflict (academy_id) do nothing;
+  end if;
+end $$;
+
+-- ---------- 2. 기본 데이터 ----------
+do $$
+declare d record;
+begin
+  for d in select * from jsonb_each('{
+    "xp_per_level": 300, "max_level": 50, "evolve_levels": [15,35], "weekly_xp_goal": 300, "point_rate": 0,
+    "point_name": "포인트",
+    "stages": ["Reader","Builder","Writer","Speaker","Author"],
+    "activity_xp": {"reading":20,"vocab":30,"syntax":30,"grammar":30,"writing":50,"homework":20,"challenge":100},
+    "activity_labels": {"reading":"원서 읽기 완료","vocab":"단어 테스트 통과","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","homework":"숙제 성실 완료","challenge":"특별 영어 챌린지"},
+    "reading_milestones": [{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
+  }'::jsonb) loop
+    if not exists (select 1 from mw_settings where academy_id is null and key = d.key) then
+      insert into mw_settings(academy_id, key, value) values (null, d.key, d.value);
+    end if;
+  end loop;
+end $$;
+
+insert into mw_species(id, name, animal, concept, rarity, season, sort, art, forms) values
+ ('flamy','FLAMY','불꽃 여우','용기와 도전','starter',null,1,
+  '{"body":"#F2A65A","belly":"#FFF3DC","accent":"#E8743B","dark":"#B5522A","ears":"fox","tail":"fox","mark":"flame"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Flamy"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Flamy"},{"stage":3,"stage_name":"Master","form_name":"Master Flamy"}]'),
+ ('lumi','LUMI','별빛 고양이','창의력과 지혜','starter',null,2,
+  '{"body":"#B8A7E8","belly":"#F1ECFF","accent":"#7C63C9","dark":"#58439E","ears":"cat","tail":"cat","mark":"star"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Lumi"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Lumi"},{"stage":3,"stage_name":"Master","form_name":"Master Lumi"}]'),
+ ('mochi','MOCHI','숲 토끼','꾸준함과 성장','starter',null,3,
+  '{"body":"#B9E4D0","belly":"#F4FFF6","accent":"#6FBF8E","dark":"#3F8F63","ears":"bunny","tail":"puff","mark":"leaf"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Mochi"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Mochi"},{"stage":3,"stage_name":"Master","form_name":"Master Mochi"}]'),
+ ('pebblo','PEBBLO','조약돌 곰','끈기와 집중','common',null,10,
+  '{"body":"#C9BCA8","belly":"#F6F0E4","accent":"#8C7B64","dark":"#5F5242","ears":"round","tail":"puff","mark":"stone"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Pebblo"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Pebblo"},{"stage":3,"stage_name":"Master","form_name":"Master Pebblo"}]'),
+ ('nimbo','NIMBO','구름 양','상상과 여유','common',null,11,
+  '{"body":"#DCE8F7","belly":"#FFFFFF","accent":"#8FB1DE","dark":"#5A7FB3","ears":"horn","tail":"puff","mark":"cloud"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Nimbo"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Nimbo"},{"stage":3,"stage_name":"Master","form_name":"Master Nimbo"}]'),
+ ('tiddle','TIDDLE','물방울 수달','호기심과 탐구','common',null,12,
+  '{"body":"#8FCBE0","belly":"#EAF8FC","accent":"#3F96B8","dark":"#2B6F8C","ears":"round","tail":"drop","mark":"drop"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Tiddle"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Tiddle"},{"stage":3,"stage_name":"Master","form_name":"Master Tiddle"}]'),
+ ('quillo','QUILLO','깃펜 부엉이','글쓰기와 표현','rare',null,20,
+  '{"body":"#4E5A85","belly":"#E9E4D4","accent":"#D9B25F","dark":"#28314B","ears":"owl","tail":"none","mark":"quill"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Quillo"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Quillo"},{"stage":3,"stage_name":"Master","form_name":"Master Quillo"}]'),
+ ('aurorix','AURORIX','오로라 사슴','통찰과 품격','rare',null,21,
+  '{"body":"#F5A995","belly":"#FFF1EA","accent":"#7FD1C2","dark":"#B86B58","ears":"antler","tail":"puff","mark":"star"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Aurorix"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Aurorix"},{"stage":3,"stage_name":"Master","form_name":"Master Aurorix"}]'),
+ ('frostie','FROSTIE','눈꽃 여우새','겨울 시즌 한정','seasonal','winter',30,
+  '{"body":"#EAF2FA","belly":"#FFFFFF","accent":"#9CC3E8","dark":"#6C93BD","ears":"cat","tail":"fox","mark":"snow"}',
+  '[{"stage":1,"stage_name":"Baby","form_name":"Baby Frostie"},{"stage":2,"stage_name":"Explorer","form_name":"Explorer Frostie"},{"stage":3,"stage_name":"Master","form_name":"Master Frostie"}]')
+on conflict (id) do nothing;
+
+-- ---------- 3. 권한 (Row Level Security) ----------
+create or replace function mw_my_academy() returns uuid
+language sql stable security definer set search_path = public as $$
+  select academy_id from mw_profiles where id = auth.uid();
+$$;
+
+create or replace function mw_is_teacher() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from mw_profiles p join mw_academies a on a.id = p.academy_id
+                  where p.id = auth.uid() and p.role = 'teacher' and p.active and a.active);
+$$;
+
+-- 이 학생이 "내 학원" 학생인가 (선생님 전용)
+create or replace function mw_same(p_student uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select mw_is_teacher() and exists (select 1 from mw_profiles s
+          where s.id = p_student and s.role = 'student' and s.academy_id = mw_my_academy());
+$$;
+
+alter table mw_academies       enable row level security;
+alter table mw_academy_secrets enable row level security;   -- 정책 없음 = 아무도 읽지 못함
+alter table mw_profiles    enable row level security;
+alter table mw_species     enable row level security;
+alter table mw_monsters    enable row level security;
+alter table mw_missions    enable row level security;
+alter table mw_books       enable row level security;
+alter table mw_ledger      enable row level security;
+alter table mw_badges      enable row level security;
+alter table mw_rewards     enable row level security;
+alter table mw_settings    enable row level security;
+alter table mw_settlements enable row level security;
+alter table mw_audit       enable row level security;
+
+drop policy if exists mw_academies_read on mw_academies;
+create policy mw_academies_read on mw_academies for select to authenticated using (id = mw_my_academy());
+drop policy if exists mw_profiles_read on mw_profiles;
+create policy mw_profiles_read on mw_profiles for select to authenticated
+  using (id = auth.uid() or (mw_is_teacher() and academy_id = mw_my_academy()));
+drop policy if exists mw_species_read on mw_species;
+create policy mw_species_read on mw_species for select to authenticated using (true);
+drop policy if exists mw_settings_read on mw_settings;
+create policy mw_settings_read on mw_settings for select to authenticated using (academy_id is null or academy_id = mw_my_academy());
+drop policy if exists mw_monsters_read on mw_monsters;
+create policy mw_monsters_read on mw_monsters for select to authenticated using (student_id = auth.uid() or mw_same(student_id));
+drop policy if exists mw_missions_read on mw_missions;
+create policy mw_missions_read on mw_missions for select to authenticated using (student_id = auth.uid() or mw_same(student_id));
+drop policy if exists mw_books_read on mw_books;
+create policy mw_books_read on mw_books for select to authenticated using (student_id = auth.uid() or mw_same(student_id));
+drop policy if exists mw_ledger_read on mw_ledger;
+create policy mw_ledger_read on mw_ledger for select to authenticated using (student_id = auth.uid() or mw_same(student_id));
+drop policy if exists mw_badges_read on mw_badges;
+create policy mw_badges_read on mw_badges for select to authenticated using (student_id = auth.uid() or mw_same(student_id));
+drop policy if exists mw_rewards_read on mw_rewards;
+create policy mw_rewards_read on mw_rewards for select to authenticated using (student_id = auth.uid() or mw_same(student_id));
+drop policy if exists mw_settlements_read on mw_settlements;
+create policy mw_settlements_read on mw_settlements for select to authenticated using (mw_same(student_id));
+drop policy if exists mw_audit_read on mw_audit;
+create policy mw_audit_read on mw_audit for select to authenticated using (mw_is_teacher() and academy_id = mw_my_academy());
+-- insert/update/delete 정책은 만들지 않습니다 → 클라이언트 직접 쓰기 전면 차단.
+
+grant select on mw_academies, mw_profiles, mw_species, mw_monsters, mw_missions, mw_books, mw_ledger,
+  mw_badges, mw_rewards, mw_settings, mw_settlements, mw_audit to authenticated;
+
+-- ---------- 4. 가입 시 프로필 자동 생성 (학원 코드가 맞을 때만) ----------
+create or replace function mw_on_signup() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid; v_code text := lower(coalesce(new.raw_user_meta_data->>'academy', ''));
+begin
+  if coalesce(new.raw_user_meta_data->>'mw', '') = 'true' then
+    begin
+      select id into v_ac from mw_academies where code = v_code and active;
+      if v_ac is not null then
+        insert into mw_profiles(id, academy_id, login_id, display_name)
+        values (new.id, v_ac, split_part(split_part(new.email, '@', 1), '.', 1),
+                left(coalesce(new.raw_user_meta_data->>'display_name', ''), 20))
+        on conflict do nothing;
+      end if;
+    exception when others then null;   -- 가입 자체는 막지 않음
+    end;
+  end if;
+  return new;
+end $$;
+drop trigger if exists mw_on_signup on auth.users;
+create trigger mw_on_signup after insert on auth.users for each row execute function mw_on_signup();
+
+-- ---------- 5. 내부 함수 (클라이언트 호출 불가) ----------
+drop function if exists mw_setting(text);
+create or replace function mw_setting(p_academy uuid, p_key text) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select value from mw_settings where key = p_key and (academy_id = p_academy or academy_id is null)
+   order by academy_id nulls last limit 1;
+$$;
+
+create or replace function mw_need_teacher() returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_is_teacher() then raise exception '선생님 권한이 필요합니다.'; end if;
+end $$;
+
+create or replace function mw_need_student(p_student uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_same(p_student) then raise exception '우리 학원 학생만 처리할 수 있습니다.'; end if;
+end $$;
+
+create or replace function mw_student_ok() returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from mw_profiles p join mw_academies a on a.id = p.academy_id
+                  where p.id = auth.uid() and p.role = 'student' and p.active and a.active);
+$$;
+
+create or replace function mw_log(p_action text, p_target uuid, p_detail jsonb) returns void
+language sql security definer set search_path = public as $$
+  insert into mw_audit(academy_id, actor, action, target, detail)
+  values (mw_my_academy(), auth.uid(), p_action, p_target, coalesce(p_detail, '{}'::jsonb));
+$$;
+
+create or replace function mw_badge(p_student uuid, p_badge text) returns void
+language sql security definer set search_path = public as $$
+  insert into mw_badges(student_id, badge_id) values (p_student, p_badge) on conflict do nothing;
+$$;
+
+create or replace function mw_grant_egg(p_student uuid, p_rarity text, p_source text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_species text; v_id uuid;
+begin
+  select s.id into v_species from mw_species s
+   where s.rarity = p_rarity and s.enabled
+     and not exists (select 1 from mw_monsters m where m.student_id = p_student and m.species_id = s.id)
+   order by random() limit 1;
+  if v_species is null then   -- 해당 등급을 모두 모았으면 다른 미보유 몬스터로 대체
+    select s.id into v_species from mw_species s
+     where s.rarity in ('common','starter','rare') and s.enabled
+       and not exists (select 1 from mw_monsters m where m.student_id = p_student and m.species_id = s.id)
+     order by case s.rarity when 'common' then 1 when 'starter' then 2 else 3 end, random() limit 1;
+  end if;
+  if v_species is null then return null; end if;
+  insert into mw_monsters(student_id, species_id, hatched, source)
+  values (p_student, v_species, false, p_source) returning id into v_id;
+  return v_id;
+end $$;
+
+create or replace function mw_apply_xp(
+  p_student uuid, p_monster uuid, p_amount int, p_kind text, p_reason text,
+  p_mission uuid, p_book uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare m mw_monsters; v_ac uuid; v_per int; v_max int; v_xp int; v_lvl int; v_stage int;
+begin
+  select * into m from mw_monsters where id = p_monster and student_id = p_student and hatched for update;
+  if not found then raise exception '성장시킬 몬스터가 없습니다.'; end if;
+  select academy_id into v_ac from mw_profiles where id = p_student;
+  v_per := greatest(1, (mw_setting(v_ac, 'xp_per_level'))::int);
+  v_max := greatest(1, (mw_setting(v_ac, 'max_level'))::int);
+  v_xp := greatest(0, m.xp + p_amount);
+  v_lvl := least(v_max, 1 + v_xp / v_per);
+  select 1 + count(*) into v_stage from jsonb_array_elements_text(mw_setting(v_ac, 'evolve_levels')) e where e::int <= v_lvl;
+  v_stage := least(3, v_stage);
+  update mw_monsters set xp = v_xp, level = v_lvl, stage = v_stage,
+         seen_level = least(seen_level, v_lvl), seen_stage = least(seen_stage, v_stage)
+   where id = m.id;
+  insert into mw_ledger(student_id, monster_id, amount, kind, reason, mission_id, book_id, level_after, actor)
+  values (p_student, m.id, p_amount, p_kind, coalesce(p_reason, ''), p_mission, p_book, v_lvl, auth.uid());
+  if v_lvl >= 10 then perform mw_badge(p_student, 'lv10'); end if;
+  if v_lvl >= 25 then perform mw_badge(p_student, 'lv25'); end if;
+  if v_stage >= 2 then perform mw_badge(p_student, 'evo_explorer'); end if;
+  if v_stage >= 3 then perform mw_badge(p_student, 'evo_master'); end if;
+  if v_lvl >= v_max and m.level < v_max then        -- 최대 레벨 달성: 배지 + 새 알
+    perform mw_badge(p_student, 'lvmax');
+    if not exists (select 1 from mw_rewards where student_id = p_student and reward_key = 'max:' || m.id) then
+      insert into mw_rewards(student_id, reward_key) values (p_student, 'max:' || m.id);
+      perform mw_grant_egg(p_student, 'common', 'Lv.MAX 달성');
+    end if;
+  end if;
+  return v_lvl;
+end $$;
+
+-- 학원 만들기 / 학원 상태 변경 — SQL Editor 에서만 실행 가능(앱에서는 호출 불가)
+create or replace function mw_create_academy(p_code text, p_name text, p_teacher_code text) returns text
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_code text := lower(btrim(p_code));
+begin
+  if v_code !~ '^[a-z0-9]{3,12}$' then raise exception '학원 코드는 영문 소문자·숫자 3~12자입니다.'; end if;
+  if length(coalesce(p_teacher_code, '')) < 6 then raise exception '선생님 코드는 6자 이상으로 정해 주세요.'; end if;
+  insert into mw_academies(code, name) values (v_code, btrim(p_name)) returning id into v_id;
+  insert into mw_academy_secrets(academy_id, teacher_code) values (v_id, p_teacher_code);
+  return '학원 생성 완료 · 학원 코드: ' || v_code;
+end $$;
+
+create or replace function mw_set_academy(p_code text, p_active boolean, p_max_students int, p_teacher_code text) returns text
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid;
+begin
+  select id into v_id from mw_academies where code = lower(btrim(p_code));
+  if v_id is null then raise exception '없는 학원 코드입니다.'; end if;
+  update mw_academies set active = coalesce(p_active, active), max_students = coalesce(p_max_students, max_students) where id = v_id;
+  if p_teacher_code is not null then
+    insert into mw_academy_secrets(academy_id, teacher_code) values (v_id, p_teacher_code)
+    on conflict (academy_id) do update set teacher_code = excluded.teacher_code;
+  end if;
+  return '변경 완료 · ' || lower(btrim(p_code));
+end $$;
+
+-- ---------- 6. 학생용 함수 ----------
+create or replace function mw_choose_starter(p_species text, p_nickname text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; p mw_profiles;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  select * into p from mw_profiles where id = auth.uid() for update;
+  if exists (select 1 from mw_monsters where student_id = p.id) then raise exception '이미 스타터를 선택했습니다.'; end if;
+  if not exists (select 1 from mw_species where id = p_species and rarity = 'starter' and enabled) then
+    raise exception '선택할 수 없는 몬스터입니다.'; end if;
+  insert into mw_monsters(student_id, species_id, nickname, hatched, hatched_at, source)
+  values (p.id, p_species, left(coalesce(p_nickname, ''), 12), true, now(), '스타터') returning id into v_id;
+  update mw_profiles set active_monster = v_id where id = p.id;
+  return v_id;
+end $$;
+
+create or replace function mw_hatch(p_monster uuid, p_nickname text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  update mw_monsters set hatched = true, hatched_at = now(), nickname = left(coalesce(p_nickname, ''), 12)
+   where id = p_monster and student_id = auth.uid() and not hatched;
+  if not found then raise exception '부화할 알이 없습니다.'; end if;
+  perform mw_badge(auth.uid(), 'first_hatch');
+end $$;
+
+create or replace function mw_set_active(p_monster uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from mw_monsters where id = p_monster and student_id = auth.uid() and hatched) then
+    raise exception '대표로 지정할 수 없는 몬스터입니다.'; end if;
+  update mw_profiles set active_monster = p_monster where id = auth.uid();
+end $$;
+
+create or replace function mw_ack(p_monster uuid) returns void
+language sql security definer set search_path = public as $$
+  update mw_monsters set seen_level = level, seen_stage = stage where id = p_monster and student_id = auth.uid();
+$$;
+
+create or replace function mw_request_mission(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  update mw_missions set status = 'requested', requested_at = now()
+   where id = p_id and student_id = auth.uid() and status in ('assigned','rejected');
+  if not found then raise exception '요청할 수 없는 미션입니다.'; end if;
+end $$;
+
+create or replace function mw_title_key(p_title text) returns text
+language sql immutable as $$
+  select lower(regexp_replace(coalesce(p_title, ''), '[^[:alnum:]]', '', 'g'));
+$$;
+
+create or replace function mw_request_book(p_title text) returns uuid
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_title text := btrim(left(coalesce(p_title, ''), 120));
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  if length(mw_title_key(v_title)) < 2 then raise exception '책 제목을 입력해 주세요.'; end if;
+  if exists (select 1 from mw_books where student_id = auth.uid() and title_key = mw_title_key(v_title)) then
+    raise exception '이미 등록한 책입니다.'; end if;
+  insert into mw_books(student_id, title, title_key) values (auth.uid(), v_title, mw_title_key(v_title)) returning id into v_id;
+  return v_id;
+end $$;
+
+-- ---------- 7. 선생님용 함수 (모두 "내 학원" 안에서만 작동) ----------
+create or replace function mw_claim_teacher(p_code text, p_name text) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid := mw_my_academy();
+begin
+  if v_ac is null or p_code is null or p_code = 'EPL-CHANGE-ME'
+     or not exists (select 1 from mw_academy_secrets s join mw_academies a on a.id = s.academy_id
+                     where s.academy_id = v_ac and a.active and s.teacher_code = p_code) then
+    perform pg_sleep(1);
+    raise exception '학원 코드 또는 선생님 코드가 올바르지 않습니다.';
+  end if;
+  update mw_profiles set role = 'teacher', active = true, display_name = left(coalesce(nullif(p_name, ''), display_name), 20)
+   where id = auth.uid();
+  perform mw_log('claim_teacher', auth.uid(), null);
+end $$;
+
+create or replace function mw_activate_student(p_id uuid, p_name text, p_active boolean) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_max int; v_cnt int;
+begin
+  perform mw_need_student(p_id);
+  if p_active then
+    select a.max_students into v_max from mw_academies a where a.id = mw_my_academy();
+    select count(*) into v_cnt from mw_profiles where academy_id = mw_my_academy() and role = 'student' and active and id <> p_id;
+    if v_cnt >= v_max then raise exception '학생 정원(%명)을 모두 사용했습니다. 정원 추가는 운영사에 문의해 주세요.', v_max; end if;
+  end if;
+  update mw_profiles set active = p_active,
+         display_name = left(coalesce(nullif(p_name, ''), display_name), 20),
+         teacher_id = coalesce(teacher_id, auth.uid())
+   where id = p_id;
+  perform mw_log('activate_student', p_id, jsonb_build_object('active', p_active));
+end $$;
+
+create or replace function mw_set_stage(p_student uuid, p_stage text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform mw_need_student(p_student);
+  if not exists (select 1 from jsonb_array_elements_text(mw_setting(mw_my_academy(), 'stages')) s where s = p_stage) then
+    raise exception '설정에 없는 단계입니다.'; end if;
+  update mw_profiles set epl_stage = p_stage where id = p_student;
+  perform mw_log('set_stage', p_student, jsonb_build_object('stage', p_stage));
+end $$;
+
+-- 미션 배정. p_approve = true 이면 배정과 동시에 승인·XP 지급(빠른 지급).
+create or replace function mw_assign_missions(
+  p_students uuid[], p_activity text, p_title text, p_xp int, p_due date, p_batch uuid, p_approve boolean)
+returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare s uuid; v_xp int; v_id uuid; v_mon uuid; v_done int := 0; v_skip int := 0;
+begin
+  perform mw_need_teacher();
+  v_xp := coalesce(p_xp, (mw_setting(mw_my_academy(), 'activity_xp')->>p_activity)::int, 0);
+  if v_xp < 0 or v_xp > 500 then raise exception 'XP는 0~500 사이여야 합니다.'; end if;
+  foreach s in array p_students loop
+    v_id := null;
+    insert into mw_missions(student_id, activity, title, xp, due_date, batch_id, created_by)
+    select s, p_activity, left(coalesce(p_title, ''), 80), v_xp, coalesce(p_due, current_date), p_batch, auth.uid()
+     where mw_same(s) and exists (select 1 from mw_profiles where id = s and active)
+    on conflict (student_id, batch_id) do nothing
+    returning id into v_id;
+    if v_id is null then v_skip := v_skip + 1; continue; end if;
+    if p_approve then
+      select active_monster into v_mon from mw_profiles where id = s;
+      if v_mon is null then v_skip := v_skip + 1; continue; end if;   -- 스타터 미선택: 배정만 됨
+      update mw_missions set status = 'approved', decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = v_id;
+      perform mw_apply_xp(s, v_mon, v_xp, 'grant', p_activity, v_id, null);
+    end if;
+    v_done := v_done + 1;
+  end loop;
+  return jsonb_build_object('done', v_done, 'skipped', v_skip);
+end $$;
+
+create or replace function mw_decide_missions(p_ids uuid[], p_approve boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r mw_missions; v_mon uuid; v_done int := 0; v_skip int := 0;
+begin
+  perform mw_need_teacher();
+  for r in select * from mw_missions where id = any(p_ids) and status in ('assigned','requested','rejected')
+            and mw_same(student_id) order by id for update loop
+    if p_approve then
+      select active_monster into v_mon from mw_profiles where id = r.student_id;
+      if v_mon is null then v_skip := v_skip + 1; continue; end if;
+      update mw_missions set status = 'approved', decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = r.id;
+      perform mw_apply_xp(r.student_id, v_mon, r.xp, 'grant', r.activity, r.id, null);
+    else
+      update mw_missions set status = 'rejected', decided_by = auth.uid(), decided_at = now() where id = r.id;
+    end if;
+    v_done := v_done + 1;
+  end loop;
+  return jsonb_build_object('done', v_done, 'skipped', v_skip);   -- 이미 처리된 미션은 조용히 건너뜀
+end $$;
+
+create or replace function mw_revoke_mission(p_id uuid, p_reason text) returns void
+language plpgsql security definer set search_path = public as $$
+declare r mw_missions;
+begin
+  perform mw_need_teacher();
+  select * into r from mw_missions where id = p_id and status = 'approved' and mw_same(student_id) for update;
+  if not found then raise exception '취소할 수 있는 승인 건이 아닙니다.'; end if;
+  update mw_missions set status = 'revoked', note = left(coalesce(p_reason, ''), 200), decided_by = auth.uid(), decided_at = now() where id = r.id;
+  perform mw_apply_xp(r.student_id, r.monster_id, -r.xp, 'revoke', coalesce(nullif(p_reason, ''), '승인 취소'), r.id, null);
+end $$;
+
+create or replace function mw_cancel_mission(p_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform mw_need_teacher();
+  update mw_missions set status = 'cancelled', decided_by = auth.uid(), decided_at = now()
+   where id = p_id and status in ('assigned','requested','rejected') and mw_same(student_id);
+  if not found then raise exception '삭제할 수 없는 미션입니다.'; end if;
+end $$;
+
+create or replace function mw_book_rewards(p_student uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_count int; ms jsonb; v_key text; v_ac uuid;
+begin
+  select academy_id into v_ac from mw_profiles where id = p_student;
+  select count(*) into v_count from mw_books where student_id = p_student and status = 'approved';
+  for ms in select * from jsonb_array_elements(mw_setting(v_ac, 'reading_milestones')) loop
+    if (ms->>'books')::int <= v_count then
+      v_key := 'books:' || (ms->>'books') || ':' || (ms->>'reward');
+      if not exists (select 1 from mw_rewards where student_id = p_student and reward_key = v_key) then
+        insert into mw_rewards(student_id, reward_key) values (p_student, v_key);
+        if ms->>'reward' = 'egg' then perform mw_grant_egg(p_student, 'common', '원서 ' || (ms->>'books') || '권');
+        elsif ms->>'reward' = 'rare_egg' then perform mw_grant_egg(p_student, 'rare', '원서 ' || (ms->>'books') || '권');
+        else perform mw_badge(p_student, coalesce(ms->>'id', 'reader' || (ms->>'books')));
+        end if;
+      end if;
+    end if;
+  end loop;
+end $$;
+
+create or replace function mw_decide_books(p_ids uuid[], p_approve boolean, p_comp int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r mw_books; v_mon uuid; v_xp int; v_done int := 0; v_skip int := 0;
+begin
+  perform mw_need_teacher();
+  v_xp := coalesce((mw_setting(mw_my_academy(), 'activity_xp')->>'reading')::int, 0);
+  for r in select * from mw_books where id = any(p_ids) and status = 'requested' and mw_same(student_id) order by id for update loop
+    if p_approve then
+      select active_monster into v_mon from mw_profiles where id = r.student_id;
+      if v_mon is null then v_skip := v_skip + 1; continue; end if;
+      update mw_books set status = 'approved', comprehension = p_comp, decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = r.id;
+      perform mw_apply_xp(r.student_id, v_mon, v_xp, 'grant', 'reading', null, r.id);
+      perform mw_book_rewards(r.student_id);
+    else
+      update mw_books set status = 'rejected', decided_by = auth.uid(), decided_at = now() where id = r.id;
+    end if;
+    v_done := v_done + 1;
+  end loop;
+  return jsonb_build_object('done', v_done, 'skipped', v_skip);
+end $$;
+
+-- 선생님이 독서 실적을 직접 등록(등록과 동시에 승인)
+create or replace function mw_add_book(p_student uuid, p_title text, p_comp int) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_title text := btrim(left(coalesce(p_title, ''), 120));
+begin
+  perform mw_need_student(p_student);
+  if length(mw_title_key(v_title)) < 2 then raise exception '책 제목을 입력해 주세요.'; end if;
+  if exists (select 1 from mw_books where student_id = p_student and title_key = mw_title_key(v_title)) then
+    raise exception '이미 등록된 책입니다.'; end if;
+  insert into mw_books(student_id, title, title_key) values (p_student, v_title, mw_title_key(v_title)) returning id into v_id;
+  return mw_decide_books(array[v_id], true, p_comp);
+end $$;
+
+create or replace function mw_revoke_book(p_id uuid, p_reason text) returns void
+language plpgsql security definer set search_path = public as $$
+declare r mw_books; v_xp int;
+begin
+  perform mw_need_teacher();
+  select * into r from mw_books where id = p_id and status = 'approved' and mw_same(student_id) for update;
+  if not found then raise exception '취소할 수 있는 독서 실적이 아닙니다.'; end if;
+  select amount into v_xp from mw_ledger where book_id = r.id and kind = 'grant';
+  update mw_books set status = 'revoked', note = left(coalesce(p_reason, ''), 200), decided_by = auth.uid(), decided_at = now() where id = r.id;
+  perform mw_apply_xp(r.student_id, r.monster_id, -coalesce(v_xp, 0), 'revoke', coalesce(nullif(p_reason, ''), '독서 실적 취소'), null, r.id);
+end $$;
+
+create or replace function mw_adjust_xp(p_student uuid, p_amount int, p_reason text) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_mon uuid;
+begin
+  perform mw_need_student(p_student);
+  if p_amount = 0 or abs(p_amount) > 1000 then raise exception '정정 XP는 ±1~1000 사이여야 합니다.'; end if;
+  if coalesce(btrim(p_reason), '') = '' then raise exception '정정 사유를 입력해 주세요.'; end if;
+  select active_monster into v_mon from mw_profiles where id = p_student;
+  if v_mon is null then raise exception '대표 몬스터가 없습니다.'; end if;
+  perform mw_apply_xp(p_student, v_mon, p_amount, 'adjust', left(p_reason, 200), null, null);
+end $$;
+
+create or replace function mw_gift_egg(p_student uuid, p_species text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform mw_need_student(p_student);
+  if exists (select 1 from mw_monsters where student_id = p_student and species_id = p_species) then
+    raise exception '이미 가지고 있는 몬스터입니다.'; end if;
+  insert into mw_monsters(student_id, species_id, hatched, source) values (p_student, p_species, false, '선생님 선물');
+  perform mw_log('gift_egg', p_student, jsonb_build_object('species', p_species));
+end $$;
+
+create or replace function mw_set_setting(p_key text, p_value jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_old jsonb; v_ac uuid := mw_my_academy();
+begin
+  perform mw_need_teacher();
+  if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
+                   'point_rate','point_name','stages','activity_labels') then
+    raise exception '알 수 없는 설정입니다.'; end if;
+  v_old := mw_setting(v_ac, p_key);
+  update mw_settings set value = p_value, updated_by = auth.uid(), updated_at = now() where academy_id = v_ac and key = p_key;
+  if not found then
+    insert into mw_settings(academy_id, key, value, updated_by) values (v_ac, p_key, p_value, auth.uid());
+  end if;
+  perform mw_log('set_setting', null, jsonb_build_object('key', p_key, 'old', v_old, 'new', p_value));
+end $$;
+
+-- 학생 비밀번호 재설정(선생님 전용, 내 학원 학생 계정에만 적용)
+create or replace function mw_reset_password(p_student uuid, p_pw text) returns void
+language plpgsql security definer set search_path = public, extensions as $$
+begin
+  perform mw_need_student(p_student);
+  if length(coalesce(p_pw, '')) < 6 then raise exception '비밀번호는 6자 이상이어야 합니다.'; end if;
+  update auth.users set encrypted_password = crypt(p_pw, gen_salt('bf')) where id = p_student;
+  perform mw_log('reset_password', p_student, null);
+end $$;
+
+-- 학생별 요약(선생님 화면·XP 기준 분석용)
+create or replace function mw_summary() returns table(student_id uuid, week_xp bigint, xp_28d bigint, books bigint, pending bigint)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform mw_need_teacher();
+  return query
+  select p.id,
+    coalesce((select sum(l.amount) from mw_ledger l where l.student_id = p.id and l.created_at >= date_trunc('week', now())), 0)::bigint,
+    coalesce((select sum(l.amount) from mw_ledger l where l.student_id = p.id and l.created_at >= now() - interval '28 days'), 0)::bigint,
+    (select count(*) from mw_books b where b.student_id = p.id and b.status = 'approved')::bigint,
+    ((select count(*) from mw_missions m where m.student_id = p.id and m.status = 'requested')
+     + (select count(*) from mw_books b where b.student_id = p.id and b.status = 'requested'))::bigint
+  from mw_profiles p where p.role = 'student' and p.academy_id = mw_my_academy();
+end $$;
+
+-- 한 주(월~일, 한국 시간) 동안 승인된 내역을 학생별로 합산. 취소된 지급은 제외.
+create or replace function mw_weekly(p_start date)
+returns table(student_id uuid, n bigint, xp bigint, acts jsonb, done_at timestamptz)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform mw_need_teacher();
+  return query
+  with g as (
+    select l.student_id as sid, l.reason, l.amount from mw_ledger l
+     where l.kind = 'grant'
+       and (l.created_at at time zone 'Asia/Seoul')::date between p_start and p_start + 6
+       and not exists (select 1 from mw_ledger r where r.kind = 'revoke'
+             and ((l.mission_id is not null and r.mission_id = l.mission_id)
+               or (l.book_id is not null and r.book_id = l.book_id)))
+  ), a as (select g.sid, g.reason, count(*) as c, sum(g.amount) as x from g group by g.sid, g.reason)
+  select p.id,
+    coalesce((select sum(a.c) from a where a.sid = p.id), 0)::bigint,
+    coalesce((select sum(a.x) from a where a.sid = p.id), 0)::bigint,
+    coalesce((select jsonb_object_agg(a.reason, a.c) from a where a.sid = p.id), '{}'::jsonb),
+    (select s.done_at from mw_settlements s where s.student_id = p.id and s.week_start = p_start)
+  from mw_profiles p where p.role = 'student' and p.active and p.academy_id = mw_my_academy();
+end $$;
+
+create or replace function mw_settle(p_students uuid[], p_start date, p_done boolean) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  perform mw_need_teacher();
+  delete from mw_settlements s where s.student_id = any(p_students) and s.week_start = p_start and mw_same(s.student_id);
+  if p_done then
+    insert into mw_settlements(student_id, week_start, done_by)
+    select u, p_start, auth.uid() from unnest(p_students) u where mw_same(u);
+  end if;
+  perform mw_log('settle', null, jsonb_build_object('week', p_start, 'done', p_done, 'count', coalesce(array_length(p_students, 1), 0)));
+end $$;
+
+-- ---------- 8. 함수 실행 권한 ----------
+do $$
+declare f record;
+begin
+  for f in select p.oid::regprocedure as sig, p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+            where n.nspname = 'public' and p.proname like 'mw\_%' loop
+    execute format('revoke all on function %s from public', f.sig);
+    begin execute format('revoke all on function %s from anon', f.sig); exception when others then null; end;
+    begin execute format('revoke all on function %s from authenticated', f.sig); exception when others then null; end;
+    if f.proname not in ('mw_apply_xp','mw_grant_egg','mw_badge','mw_book_rewards','mw_on_signup','mw_need_teacher',
+                         'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy') then
+      execute format('grant execute on function %s to authenticated', f.sig);
+    end if;
+  end loop;
+end $$;
+
+-- =====================================================================
+-- 학원 만들기 (학원을 추가할 때마다 아래 한 줄을 값만 바꿔 실행)
+--   select mw_create_academy('학원코드', '학원 이름', '선생님 코드');
+--   예) select mw_create_academy('epl', 'EPL 영어학원', '여기에-선생님-코드');
+--
+-- 학원 상태 변경 (이용 중지 / 정원 변경 / 선생님 코드 변경 — 바꾸지 않을 값은 null)
+--   select mw_set_academy('학원코드', false, null, null);     -- 이용 중지
+--   select mw_set_academy('학원코드', null, 200, null);       -- 학생 정원 200명
+--   select mw_set_academy('학원코드', null, null, '새코드');  -- 선생님 코드 변경
+-- =====================================================================
