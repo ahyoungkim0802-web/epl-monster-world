@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.11: 책 종류별 1권 완료(독해·구문·문법·라이팅·단어책, 각 200 XP, 선생님 지급)를 추가하고, 학생 요청이던 "교재 1권 완료"를 대신함
 -- v2.10: 클래스카드 활동(학생 요청, 50 XP, 어휘) + 연속 보상(streak_rewards): 평일 7일 연속 승인 → 진화석 1개. 주말은 세지도 끊지도 않음
 -- v2.9: 원장(관리자) 계정. 선생님 계정은 원장만 보고 바꿀 수 있음. 학원마다 가장 먼저 가입한 선생님이 원장
 -- v2.8: 선생님 계정 이름·비밀번호 변경(mw_update_teacher). 퇴사 시 계정을 새 선생님에게 넘길 때 사용
@@ -225,15 +226,15 @@ begin
     "xp_per_level": 1000, "max_level": 50, "evolve_levels": [15,35], "evolve_bonus": [500,1000], "weekly_xp_goal": 800, "point_rate": 0,
     "point_name": "포인트",
     "stages": ["Reader","Builder","Writer","Speaker","Author"],
-    "activity_xp": {"classcard":50,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
-    "activity_labels": {"classcard":"클래스카드 학습","reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
-    "activity_list": ["attend","late","good","bad","vocab","classcard","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
-    "self_report_acts": ["vocab","classcard","textbook","bookwriting","bookquiz","homework"],
+    "activity_xp": {"classcard":50,"book_reading":200,"book_syntax":200,"book_grammar":200,"book_writing":200,"book_vocab":200,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
+    "activity_labels": {"classcard":"클래스카드 학습","book_reading":"독해책 1권 완료","book_syntax":"구문책 1권 완료","book_grammar":"문법책 1권 완료","book_writing":"라이팅책 1권 완료","book_vocab":"단어책 1권 완료","reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
+    "activity_list": ["attend","late","good","bad","vocab","classcard","book_reading","book_syntax","book_grammar","book_writing","book_vocab","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
+    "self_report_acts": ["vocab","classcard","bookwriting","bookquiz","homework"],
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
     "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
-    "activity_stats": {"classcard":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
+    "activity_stats": {"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
     "stat_rewards": [{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
     "reading_milestones": [{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
@@ -252,6 +253,19 @@ begin
     update mw_settings set value = value || '{"classcard":"vocab"}'::jsonb where key = 'activity_stats' and not value ? 'classcard';
     update mw_settings set value = value || '["classcard"]'::jsonb where key in ('activity_list','self_report_acts') and not value ? 'classcard';
     insert into mw_settings(academy_id, key, value) values (null, 'migr_classcard', 'true'::jsonb);
+  end if;
+end $$;
+
+-- v2.11: 책 종류별 1권 완료(선생님 지급)를 한 번만 추가하고, "교재 1권 완료"는 목록과 학생 요청에서 뺍니다(지난 기록은 그대로).
+do $$
+begin
+  if not exists (select 1 from mw_settings where academy_id is null and key = 'migr_books') then
+    update mw_settings set value = '{"book_reading":200,"book_syntax":200,"book_grammar":200,"book_writing":200,"book_vocab":200}'::jsonb || value where key = 'activity_xp';
+    update mw_settings set value = '{"book_reading":"독해책 1권 완료","book_syntax":"구문책 1권 완료","book_grammar":"문법책 1권 완료","book_writing":"라이팅책 1권 완료","book_vocab":"단어책 1권 완료"}'::jsonb || value where key = 'activity_labels';
+    update mw_settings set value = '{"book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab"}'::jsonb || value where key = 'activity_stats';
+    update mw_settings set value = (value - 'textbook') || '["book_reading","book_syntax","book_grammar","book_writing","book_vocab"]'::jsonb where key = 'activity_list' and not value ? 'book_reading';
+    update mw_settings set value = value - 'textbook' where key = 'self_report_acts';
+    insert into mw_settings(academy_id, key, value) values (null, 'migr_books', 'true'::jsonb);
   end if;
 end $$;
 

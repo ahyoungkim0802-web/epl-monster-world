@@ -109,7 +109,7 @@ body.busy [data-act]{pointer-events:none;opacity:.7}
 .mi{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
 .mi:first-of-type{border-top:0}
 .chip{background:#EEF0F4;flex:none;width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:15px;color:var(--navy)}
-.a-vocab{background:#E7DFFB}.a-syntax{background:#D6EFE3}.a-grammar{background:#FDE3DA}.a-writing{background:#FBEBC8}.a-homework{background:#E3E8F5}.a-bookwriting{background:#F7E1EC}.a-bookquiz{background:#E2F0D9}.a-attend{background:#DDF2E4}.a-late{background:#FBE0DC}.a-good{background:#E1F0FA}.a-bad{background:#F9D6D6}.a-textbook{background:#FFF0C9}.a-praise{background:#FCE7F3}.a-ar{background:#D8ECF3}.a-nelt{background:#E4E0F7}
+.a-vocab{background:#E7DFFB}.a-syntax{background:#D6EFE3}.a-grammar{background:#FDE3DA}.a-writing{background:#FBEBC8}.a-homework{background:#E3E8F5}.a-bookwriting{background:#F7E1EC}.a-bookquiz{background:#E2F0D9}.a-attend{background:#DDF2E4}.a-late{background:#FBE0DC}.a-good{background:#E1F0FA}.a-bad{background:#F9D6D6}.a-textbook{background:#FFF0C9}.a-book_reading{background:#DCEBFA}.a-book_syntax{background:#D6EFE3}.a-book_grammar{background:#FDE3DA}.a-book_writing{background:#FBEBC8}.a-book_vocab{background:#E7DFFB}.a-praise{background:#FCE7F3}.a-ar{background:#D8ECF3}.a-nelt{background:#E4E0F7}
 #actRows .inp,#zoneRows .inp,#srRows .inp{min-height:36px;padding:6px 10px}#actRows td,#zoneRows td,#srRows td{vertical-align:middle}.a-challenge{background:var(--navy);color:#fff}.a-reading{background:#DDEFF6}
 .mi .t{flex:1;min-width:0}
 .mi .t b{display:block;font-weight:600;overflow-wrap:anywhere}
@@ -252,7 +252,7 @@ const ymd=d=>{d=new Date(d);return d.getFullYear()+'-'+String(d.getMonth()+1).pa
 const today=()=>ymd(new Date());
 const weekStart=()=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d};
 const fmtD=s=>{const d=new Date(s);return (d.getMonth()+1)+'.'+d.getDate()};
-const ACT_BASE={attend:['At','출석'],late:['Lt','지각'],good:['Gd','태도 Good'],bad:['Bd','태도 Bad'],vocab:['Vo','단어 테스트 통과'],classcard:['CC','클래스카드 학습'],textbook:['Tb','교재 1권 완료'],bookwriting:['Bw','북라이팅 완료'],bookquiz:['Bq','북퀴즈 통과'],homework:['Hw','숙제 성실 완료'],praise:['Sp','Special Praise'],ar:['AR','AR 북레벨 +1'],nelt:['NE','NELT 레벨 +1'],syntax:['Sx','Syntax Builder 완료'],grammar:['Gr','Grammar 완료'],writing:['Wr','Writing Builder 완료'],challenge:['Ch','특별 영어 챌린지'],reading:['Rd','원서 읽기 완료']};
+const ACT_BASE={attend:['At','출석'],late:['Lt','지각'],good:['Gd','태도 Good'],bad:['Bd','태도 Bad'],vocab:['Vo','단어 테스트 통과'],classcard:['CC','클래스카드 학습'],book_reading:['RB','독해책 1권 완료'],book_syntax:['SB','구문책 1권 완료'],book_grammar:['GB','문법책 1권 완료'],book_writing:['WB','라이팅책 1권 완료'],book_vocab:['VB','단어책 1권 완료'],textbook:['Tb','교재 1권 완료'],bookwriting:['Bw','북라이팅 완료'],bookquiz:['Bq','북퀴즈 통과'],homework:['Hw','숙제 성실 완료'],praise:['Sp','Special Praise'],ar:['AR','AR 북레벨 +1'],nelt:['NE','NELT 레벨 +1'],syntax:['Sx','Syntax Builder 완료'],grammar:['Gr','Grammar 완료'],writing:['Wr','Writing Builder 완료'],challenge:['Ch','특별 영어 챌린지'],reading:['Rd','원서 읽기 완료']};
 let ACT=Object.fromEntries(Object.entries(ACT_BASE).map(([k,v])=>[k,[...v]]));
 const wkTarget=r=>r.n>0||Number(r.bonus)>0,wkAmt=r=>{const rate=Number(W.set.point_rate)||0;return(rate?Math.round(r.xp*rate):Number(r.xp))+(Number(r.bonus)||0)},evoBonus=to=>Number((W.set.evolve_bonus||[500,1000])[to-2])||0;
 const actList=set=>((set&&Array.isArray(set.activity_list))?set.activity_list:DEF_SET.activity_list).filter(k=>k!=='reading');
@@ -372,14 +372,14 @@ const SPECIES_SEED=[
 ].map((r,i)=>({id:r[0],name:r[1],animal:r[2],concept:r[3],rarity:r[4],season:r[5],enabled:true,sort:i,art:r[6],
   forms:[1,2,3].map(s=>({stage:s,stage_name:STN[s],form_name:STN[s]+' '+r[1][0]+r[1].slice(1).toLowerCase()}))}));
 const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speaker','Author'],activity_labels:{},point_rate:0,xp_per_level:1000,max_level:50,evolve_levels:[15,35],evolve_bonus:[500,1000],weekly_xp_goal:800,
-  activity_xp:{"classcard":50,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
-  activity_list:["attend","late","good","bad","vocab","classcard","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
-  self_report_acts:["vocab","classcard","textbook","bookwriting","bookquiz","homework"],
+  activity_xp:{"classcard":50,"book_reading":200,"book_syntax":200,"book_grammar":200,"book_writing":200,"book_vocab":200,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
+  activity_list:["attend","late","good","bad","vocab","classcard","book_reading","book_syntax","book_grammar","book_writing","book_vocab","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
+  self_report_acts:["vocab","classcard","bookwriting","bookquiz","homework"],
   map_name_mode:'nickname',
   map_zones:[{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
   activity_stones:{ar:'evo',nelt:'legend'},
   streak_rewards:{classcard:{days:7,stone:'evo'}},
-  activity_stats:{"classcard":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
+  activity_stats:{"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
   stat_rewards:[{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
   reading_milestones:[{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]};
 const Demo={
