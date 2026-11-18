@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.10: 클래스카드 활동(학생 요청, 50 XP, 어휘) + 연속 보상(streak_rewards): 평일 7일 연속 승인 → 진화석 1개. 주말은 세지도 끊지도 않음
 -- v2.9: 원장(관리자) 계정. 선생님 계정은 원장만 보고 바꿀 수 있음. 학원마다 가장 먼저 가입한 선생님이 원장
 -- v2.8: 선생님 계정 이름·비밀번호 변경(mw_update_teacher). 퇴사 시 계정을 새 선생님에게 넘길 때 사용
 -- v2.7: 진화 보너스. Elite·Legend로 진화하면 그 주 주간 정산의 입력할 포인트에 보너스(기본 500·1000)를 더함(XP 아님)
@@ -224,14 +225,15 @@ begin
     "xp_per_level": 1000, "max_level": 50, "evolve_levels": [15,35], "evolve_bonus": [500,1000], "weekly_xp_goal": 800, "point_rate": 0,
     "point_name": "포인트",
     "stages": ["Reader","Builder","Writer","Speaker","Author"],
-    "activity_xp": {"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
-    "activity_labels": {"reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
-    "activity_list": ["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
-    "self_report_acts": ["vocab","textbook","bookwriting","bookquiz","homework"],
+    "activity_xp": {"classcard":50,"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
+    "activity_labels": {"classcard":"클래스카드 학습","reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
+    "activity_list": ["attend","late","good","bad","vocab","classcard","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
+    "self_report_acts": ["vocab","classcard","textbook","bookwriting","bookquiz","homework"],
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
-    "activity_stats": {"reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
+    "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
+    "activity_stats": {"classcard":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
     "stat_rewards": [{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
     "reading_milestones": [{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
@@ -239,6 +241,18 @@ begin
       insert into mw_settings(academy_id, key, value) values (null, d.key, d.value);
     end if;
   end loop;
+end $$;
+
+-- v2.10: 이미 운영 중인 학원 설정에 클래스카드를 한 번만 추가합니다(이후 선생님이 지워도 다시 넣지 않음).
+do $$
+begin
+  if not exists (select 1 from mw_settings where academy_id is null and key = 'migr_classcard') then
+    update mw_settings set value = value || '{"classcard":50}'::jsonb where key = 'activity_xp' and not value ? 'classcard';
+    update mw_settings set value = value || '{"classcard":"클래스카드 학습"}'::jsonb where key = 'activity_labels' and not value ? 'classcard';
+    update mw_settings set value = value || '{"classcard":"vocab"}'::jsonb where key = 'activity_stats' and not value ? 'classcard';
+    update mw_settings set value = value || '["classcard"]'::jsonb where key in ('activity_list','self_report_acts') and not value ? 'classcard';
+    insert into mw_settings(academy_id, key, value) values (null, 'migr_classcard', 'true'::jsonb);
+  end if;
 end $$;
 
 -- v2.1 보충: 이미 있는 설정에 새 활동(북라이팅·북퀴즈)만 추가합니다. 학원이 바꾼 값은 그대로 둡니다.
@@ -504,6 +518,40 @@ $$;
 
 -- 진화석 잔액: 받은 돌(activity_stones 활동의 취소되지 않은 지급 1건 = 1개) − 쓴 돌(mw_rewards 'evo:<몬스터>:<단계>:<사용>')
 -- Demo.stoneBalance 와 같은 규칙
+-- 연속 기록(내부용). streak_rewards = {활동: {days, stone}}. 평일(월~금)만 세고 주말은 건너뜀(끊기지 않음).
+--   len: 지금 이어지고 있는 연속 일수(승인 + 확인 중 포함, 오늘 아직 안 했으면 어제까지 이어진 기록)
+--   earned: 승인된 날만으로 만든 연속 구간마다 days일당 돌 1개. 지급 순서와 상관없이 기록에서 계산하므로 중복 지급이 없음
+create or replace function mw_streak_info(p_student uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  with cfg as (select coalesce(mw_setting(p.academy_id, 'streak_rewards'), '{}'::jsonb) as m from mw_profiles p where p.id = p_student),
+  acts as (select e.key as act, (e.value ->> 'days')::int as days, e.value ->> 'stone' as stone
+             from cfg, jsonb_each(cfg.m) e
+            where jsonb_typeof(e.value) = 'object' and coalesce(e.value ->> 'days', '') ~ '^[0-9]{1,3}$'
+              and (e.value ->> 'days')::int >= 2 and e.value ->> 'stone' in ('evo','legend')),
+  td as (select (now() at time zone 'Asia/Seoul')::date - date '2024-01-01' as t),
+  base as (select m.activity as act,
+                  ((m.due_date - date '2024-01-01') / 7) * 5 + ((m.due_date - date '2024-01-01') % 7) as idx,
+                  bool_or(m.status = 'approved') as ok
+             from mw_missions m join acts a on a.act = m.activity
+            where m.student_id = p_student and m.status in ('approved','requested')
+              and m.due_date >= date '2024-01-01' and (m.due_date - date '2024-01-01') % 7 < 5
+            group by 1, 2),
+  ra as (select act, idx - row_number() over (partition by act order by idx) as g from base where ok),
+  earned as (select r.act, sum(r.n / a.days)::int as n
+               from (select act, g, count(*)::int as n from ra group by 1, 2) r join acts a on a.act = r.act group by 1),
+  rb as (select act, idx, idx - row_number() over (partition by act order by idx) as g from base),
+  runs as (select act, max(idx) as last, count(*)::int as n from rb group by act, g)
+  select coalesce(jsonb_object_agg(a.act, jsonb_build_object(
+           'days', a.days, 'stone', a.stone,
+           'earned', coalesce((select e.n from earned e where e.act = a.act), 0),
+           'today', (td.t % 7 < 5) and exists (select 1 from base b where b.act = a.act and b.idx = (td.t / 7) * 5 + td.t % 7),
+           'len', coalesce((select r.n from runs r where r.act = a.act and r.last in (
+                    case when td.t % 7 < 5 then (td.t / 7) * 5 + td.t % 7 else (td.t / 7) * 5 + 4 end,
+                    case when td.t % 7 < 5 then (td.t / 7) * 5 + td.t % 7 - 1 else -1 end)
+                  order by r.last desc limit 1), 0))), '{}'::jsonb)
+    from acts a, td;
+$$;
+
 create or replace function mw_stone_balance(p_student uuid) returns jsonb
 language sql stable security definer set search_path = public as $$
   with cfg as (select coalesce(mw_setting(p.academy_id, 'activity_stones'), '{}'::jsonb) as m from mw_profiles p where p.id = p_student),
@@ -518,10 +566,14 @@ language sql stable security definer set search_path = public as $$
   spent as (
     select coalesce(sum(case split_part(reward_key, ':', 4) when 'evo' then 1 when 'evo2' then 2 else 0 end), 0)::int as evo,
            coalesce(sum(case split_part(reward_key, ':', 4) when 'legend' then 1 else 0 end), 0)::int as legend
-      from mw_rewards where student_id = p_student and reward_key like 'evo:%')
+      from mw_rewards where student_id = p_student and reward_key like 'evo:%'),
+  streak as (
+    select coalesce(sum(case when e.value ->> 'stone' = 'evo' then (e.value ->> 'earned')::int end), 0)::int as evo,
+           coalesce(sum(case when e.value ->> 'stone' = 'legend' then (e.value ->> 'earned')::int end), 0)::int as legend
+      from jsonb_each(mw_streak_info(p_student)) e)
   select jsonb_build_object(
-    'evo',    greatest(0, coalesce((select n from earned where k = 'evo'), 0)    - (select evo from spent)),
-    'legend', greatest(0, coalesce((select n from earned where k = 'legend'), 0) - (select legend from spent)));
+    'evo',    greatest(0, coalesce((select n from earned where k = 'evo'), 0)    + (select evo from streak)    - (select evo from spent)),
+    'legend', greatest(0, coalesce((select n from earned where k = 'legend'), 0) + (select legend from streak) - (select legend from spent)));
 $$;
 
 -- 정해진 몬스터 알 지급. 이미 가진 몬스터면 같은 등급의 다른 미보유 몬스터로 대신 지급
@@ -688,6 +740,14 @@ language plpgsql stable security definer set search_path = public as $$
 begin
   if not ((p_student = auth.uid() and mw_student_ok()) or mw_same(p_student)) then raise exception '볼 수 없는 학생입니다.'; end if;
   return mw_stone_balance(p_student);
+end $$;
+
+-- 연속 기록 조회: 본인 또는 우리 학원 선생님만
+create or replace function mw_streaks(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not ((p_student = auth.uid() and mw_student_ok()) or mw_same(p_student)) then raise exception '볼 수 없는 학생입니다.'; end if;
+  return mw_streak_info(p_student);
 end $$;
 
 -- 진화: 학생이 자기 몬스터를 골라 돌을 써서 진화. 레벨 조건(evolve_levels) + 돌
@@ -967,7 +1027,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -994,6 +1054,12 @@ begin
            or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
            or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
     raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
+  if p_key = 'streak_rewards' and (jsonb_typeof(p_value) <> 'object' or (select count(*) from jsonb_object_keys(p_value)) > 10 or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key !~ '^[a-z0-9_]{1,24}$' or jsonb_typeof(e.value) <> 'object'
+           or coalesce(e.value ->> 'days', '') !~ '^[0-9]{1,2}$' or (e.value ->> 'days')::int not between 2 and 60
+           or coalesce(e.value ->> 'stone', '') not in ('evo','legend'))) then
+    raise exception '연속 보상 설정이 올바르지 않습니다. 연속 일수는 2~60일입니다.'; end if;
   if p_key = 'evolve_bonus' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) <> 2 or exists (
        select 1 from jsonb_array_elements(p_value) e
         where jsonb_typeof(e) <> 'number' or (e #>> '{}')::numeric not between 0 and 10000 or (e #>> '{}')::numeric <> round((e #>> '{}')::numeric))) then
@@ -1121,7 +1187,7 @@ begin
     begin execute format('revoke all on function %s from authenticated', f.sig); exception when others then null; end;
     if f.proname not in ('mw_apply_xp','mw_grant_egg','mw_badge','mw_book_rewards','mw_on_signup','mw_need_teacher',
                          'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy',
-                         'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance') then
+                         'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
