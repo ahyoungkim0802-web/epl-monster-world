@@ -1,0 +1,13 @@
+{
+  "name": "MONSTER WORLD",
+  "short_name": "MONSTER",
+  "description": "영어 활동으로 몬스터를 키우는 학원용 학습 게임",
+  "display": "standalone",
+  "background_color": "#28314B",
+  "theme_color": "#28314B",
+  "lang": "ko",
+  "icons": [
+    {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable"}
+  ]
+}
