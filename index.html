@@ -997,7 +997,7 @@ function viewCave(){const C=UI.cave;const back=`<div class="row" style="justify-
       if(u.unit%5===0){const rng=bk.units.filter(x=>x.unit>u.unit-5&&x.unit<=u.unit),ok=!u.locked&&rng.every(x=>won.has(x.unit));
         tiles+=`<button class="ctile gate ${u.gate_won?'won':''}" data-act="btStart" data-b="${bk.book}" data-u="${u.unit}" data-g="1" ${ok&&C.open?'':'disabled'}><b>🛡 수문장</b><span>Unit ${u.unit-4}–${u.unit} · ${u.gate_won?'✓ 격파':ok?'도전 가능 · 철자 문제 포함':'5개 Unit을 모두 이기면 열려요'}</span></button>`}}
     return `<section class="card"><h3>지하 ${bk.book}층 <small>${bk.book}권</small></h3><div class="cgrid">${tiles}</div></section>`}).join('');
-  return `<div class="stack">${back}${head}${floors||'<div class="empty">아직 단어장이 없습니다.</div>'}</div>`}
+  return `<div class="stack">${back}${head}${floors||'<div class="empty">아직 도전할 단어가 없어요. 선생님이 단어장을 올리면 여기에 Unit이 나타나요.</div>'}</div>`}
 const wildSp=id=>{const pool=SPECIES_SEED.filter(s=>s.rarity!=='seasonal');let h=0;for(const ch of String(id))h=(h*31+ch.charCodeAt(0))>>>0;return pool[h%pool.length]};
 function viewBattle(){const b=UI.bt,fb=UI.btFb,m=myActive(),sp=m&&spOf(m.species_id),wild=wildSp(b.id),gate=b.kind==='gate';
   const top=`<section class="bt-top"><span class="tiny" style="letter-spacing:.14em;color:#E8A93A">${gate?'수문장 · Unit '+(b.unit-4)+'–'+b.unit:b.book+'권 · Unit '+b.unit}</span>${monsterSVG(wild,gate?3:2)}<b>${gate?'동굴 수문장 ':'야생 '}${esc(wild.name)}</b>
