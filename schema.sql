@@ -2,6 +2,7 @@
 -- MONSTER WORLD · 데이터베이스 v2.2  (Supabase / PostgreSQL) — 여러 학원용
 -- v2.2: 칭찬모아 기준(출석·태도·AR·NELT 등, 차감 포함), 선생님이 활동 목록을 직접 편집, 1000 XP = 1레벨
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
+-- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
 -- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
@@ -222,6 +223,7 @@ begin
     "activity_labels": {"reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
     "activity_list": ["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
     "self_report_acts": ["vocab","textbook","bookwriting","bookquiz","homework"],
+    "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "reading_milestones": [{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
@@ -578,15 +580,30 @@ begin
 end $$;
 
 -- 마을 지도: 내 학원 활성 학생의 이름·레벨·대표 몬스터만 돌려줍니다(XP·기록 등 다른 정보는 공개하지 않음).
--- 체험 모드 Demo.F.map 과 같은 규칙입니다.
+-- 학생에게는 학원 설정(map_name_mode)에 따라 다른 학생 이름을 서버에서 가려서 보냅니다. 선생님은 항상 실명.
+--   nickname: 몬스터 별명(없으면 몬스터 이름) / masked: 김*준 / real: 실명 / hidden: 이름·몬스터 없이 레벨 위치만
+-- 다른 학생의 계정 id는 학생에게 보내지 않습니다. 체험 모드 Demo.F.map 과 같은 규칙입니다.
 drop function if exists mw_map();
 create or replace function mw_map() returns table(student_id uuid, name text, level int, stage int, species_id text)
 language plpgsql stable security definer set search_path = public as $$
+declare v_t boolean := mw_is_teacher(); v_mode text;
 begin
-  if not (mw_student_ok() or mw_is_teacher()) then raise exception '승인된 계정이 아닙니다.'; end if;
+  if not (mw_student_ok() or v_t) then raise exception '승인된 계정이 아닙니다.'; end if;
+  v_mode := coalesce(mw_setting(mw_my_academy(), 'map_name_mode') #>> '{}', 'nickname');
   return query
-  select p.id, p.display_name, coalesce(m.level, 1), coalesce(m.stage, 1), m.species_id
-    from mw_profiles p left join mw_monsters m on m.id = p.active_monster
+  select case when v_t or p.id = auth.uid() then p.id end,
+         case when v_t or p.id = auth.uid() or v_mode = 'real' then p.display_name
+              when v_mode = 'masked' then
+                case when char_length(p.display_name) <= 1 then '*'
+                     when char_length(p.display_name) = 2 then left(p.display_name, 1) || '*'
+                     else left(p.display_name, 1) || repeat('*', char_length(p.display_name) - 2) || right(p.display_name, 1) end
+              when v_mode = 'hidden' then null
+              else coalesce(nullif(btrim(m.nickname), ''), s.name, '새 모험가') end,
+         coalesce(m.level, 1), coalesce(m.stage, 1),
+         case when v_t or p.id = auth.uid() or v_mode <> 'hidden' then m.species_id end
+    from mw_profiles p
+    left join mw_monsters m on m.id = p.active_monster
+    left join mw_species s on s.id = m.species_id
    where p.academy_id = mw_my_academy() and p.role = 'student' and p.active
    order by coalesce(m.level, 1) desc, p.display_name;
 end $$;
@@ -797,7 +814,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -810,6 +827,8 @@ begin
        select 1 from jsonb_array_elements(p_value) e
         where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[a-z0-9_]{1,24}$')) then
     raise exception '활동 목록 형식이 올바르지 않습니다.'; end if;
+  if p_key = 'map_name_mode' and (jsonb_typeof(p_value) <> 'string' or (p_value #>> '{}') not in ('nickname','masked','real','hidden')) then
+    raise exception '이름 표시 방식이 올바르지 않습니다.'; end if;
   if p_key = 'map_zones' and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) not between 1 and 8 or exists (
        select 1 from jsonb_array_elements(p_value) with ordinality z(v, i)
         where jsonb_typeof(z.v) <> 'object' or jsonb_typeof(z.v->'from') <> 'number'

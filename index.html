@@ -362,6 +362,7 @@ const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speak
   activity_xp:{"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
   activity_list:["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
   self_report_acts:["vocab","textbook","bookwriting","bookquiz","homework"],
+  map_name_mode:'nickname',
   map_zones:[{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
   reading_milestones:[{books:10,reward:'egg'},{books:30,reward:'rare_egg'},{books:50,reward:'badge',id:'reader50'},{books:100,reward:'badge',id:'master_reader'}]};
 const Demo={
@@ -431,8 +432,11 @@ const Demo={
       if(ms.length)throw new Error('오늘 이미 요청한 활동입니다.');
       const xp=this.st.set.activity_xp[a.activity];if(!(Number.isInteger(xp)&&xp<=5000))throw new Error('이 활동의 XP 기준이 설정되지 않았습니다. 선생님께 알려 주세요.');if(xp<0)throw new Error('차감 항목은 선생님만 입력할 수 있습니다.');
       const m={id:uuid(),student_id:p.id,activity:a.activity,title:'',xp,due_date:d,status:'requested',batch_id:null,created_by:p.id,created_at:new Date().toISOString(),requested_at:new Date().toISOString()};this.st.missions.push(m);return m.id},
-    map(){const me=this.me();if(!me||!me.active)throw new Error('승인된 계정이 아닙니다.');
-      return this.st.profiles.filter(p=>p.role==='student'&&p.active).map(p=>{const m=this.st.monsters.find(x=>x.id===p.active_monster);return{student_id:p.id,name:p.display_name,level:m?m.level:1,stage:m?m.stage:1,species_id:m?m.species_id:null}})
+    map(){const me=this.me();if(!me||!me.active)throw new Error('승인된 계정이 아닙니다.');const T=me.role==='teacher',mode=this.st.set.map_name_mode||'nickname';
+      const mask=n=>n.length<=1?'*':n.length===2?n[0]+'*':n[0]+'*'.repeat(n.length-2)+n[n.length-1];
+      return this.st.profiles.filter(p=>p.role==='student'&&p.active).map(p=>{const m=this.st.monsters.find(x=>x.id===p.active_monster),self=T||p.id===me.id,sp=m&&SPECIES_SEED.find(x=>x.id===m.species_id);
+        const name=self||mode==='real'?p.display_name:mode==='masked'?mask(p.display_name):mode==='hidden'?null:((m&&m.nickname||'').trim()||(sp&&sp.name)||'새 모험가');
+        return{student_id:self?p.id:null,name,level:m?m.level:1,stage:m?m.stage:1,species_id:m&&(self||mode!=='hidden')?m.species_id:null}})
         .sort((a,b)=>b.level-a.level||a.name.localeCompare(b.name,'ko'))},
     request_book(a){const t=(a.title||'').trim().slice(0,120),k=this.key(t);if(k.length<2)throw new Error('책 제목을 입력해 주세요.');if(this.st.books.some(b=>b.student_id===this.uid&&b.title_key===k))throw new Error('이미 등록한 책입니다.');
       this.st.books.push({id:uuid(),student_id:this.uid,title:t,title_key:k,status:'requested',created_at:new Date().toISOString()})},
@@ -456,6 +460,7 @@ const Demo={
     set_stage(a){this.T();const p=this.st.profiles.find(x=>x.id===a.student);if(p)p.epl_stage=a.stage},
     set_setting(a){this.T();const K=/^[a-z0-9_]{1,24}$/,v=a.value;
       if(a.key==='activity_xp'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!Number.isInteger(x)||x<-5000||x>5000)))throw new Error('활동 XP는 -5000~5000 사이 정수여야 합니다.');
+      if(a.key==='map_name_mode'&&!['nickname','masked','real','hidden'].includes(v))throw new Error('이름 표시 방식이 올바르지 않습니다.');
       if(a.key==='map_zones'&&(!Array.isArray(v)||v.length<1||v.length>8||v.some((z,i)=>!z||typeof z!=='object'||typeof z.from!=='number'||!(String(z.name||'').length>=1&&String(z.name).length<=24)||String(z.ko||'').length>24||(i===0&&z.from!==1)||(i>0&&z.from<=v[i-1].from))))throw new Error('마을 지도 설정이 올바르지 않습니다. 첫 마을은 Lv.1부터, 시작 레벨은 점점 커져야 합니다.');
       if(['activity_list','self_report_acts'].includes(a.key)&&(!Array.isArray(v)||v.length>40||v.some(k=>typeof k!=='string'||!K.test(k))))throw new Error('활동 목록 형식이 올바르지 않습니다.');
       this.st.set[a.key]=v},
@@ -708,6 +713,8 @@ function viewTeacher(){
       <p class="tiny muted">'학생 요청'에 체크한 활동은 학생 화면의 '다 했어요'에 나오고, 나머지는 선생님이 빠른 지급으로 줍니다. 차감 항목은 학생 요청으로 둘 수 없습니다. 원서 읽기는 독서 탭에서 요청합니다.</p>
       <h3 style="margin:6px 0 0">마을 지도 <small>레벨 구간별 지역 이름</small></h3>
       <div class="tw"><table><thead><tr><th>시작 레벨</th><th>지역 이름</th><th>한글 이름</th></tr></thead><tbody id="zoneRows">${mapZones().map((z,i)=>`<tr><td><input class="inp zf num" type="number" min="1" max="100" value="${z.from}" ${i===0?'readonly':''} aria-label="시작 레벨" style="width:80px"></td><td><input class="inp zn" maxlength="24" value="${esc(z.name)}" aria-label="지역 이름"></td><td><input class="inp zk" maxlength="24" value="${esc(z.ko||'')}" aria-label="한글 이름"></td></tr>`).join('')}</tbody></table></div>
+      <label class="field">학생 화면의 이름 표시<select id="sMapName">${[['nickname','몬스터 별명 (추천)'],['masked','가린 이름 (예: 김*준)'],['real','실명'],['hidden','나만 보기 (다른 학생은 이름 없이 점으로)']].map(([v,t])=>`<option value="${v}" ${(s.map_name_mode||'nickname')===v?'selected':''}>${t}</option>`).join('')}</select></label>
+      <p class="tiny muted">선생님 화면에는 항상 실명이 보입니다. 학생 화면에 실명을 보이려면 학부모 동의를 받아 두세요.</p>
       <h3 style="margin:6px 0 0">독서 보상 기준 (권수)</h3><div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">${s.reading_milestones.map((m,i)=>`<label class="field">${m.id==='master_reader'?'마스터 리더 칭호':{egg:'새 몬스터 알',rare_egg:'희귀 몬스터 알',badge:'특별 배지'}[m.reward]}<input id="sm_${i}" type="number" min="1" value="${m.books}"></label>`).join('')}</div>
       <h3 style="margin:6px 0 0">우리 학원 용어</h3>
       <label class="field">영어 역량 단계 이름 (쉼표로 구분 · 비우면 단계 표시 안 함)<input id="sStg" maxlength="120" value="${esc(stg().join(', '))}"></label>
@@ -739,7 +746,7 @@ const mapZones=()=>(W&&W.set&&Array.isArray(W.set.map_zones)&&W.set.map_zones.le
 const zoneOf=(lv,Z)=>{let k=0;Z.forEach((z,j)=>{if(lv>=z.from)k=j});return k};
 function mapPt(t){const P=MAP_P,u=Math.max(0,Math.min(1,t))*(P.length-1),i=Math.min(P.length-2,Math.floor(u)),f=u-i;return[P[i][0]+(P[i+1][0]-P[i][0])*f,P[i][1]+(P[i+1][1]-P[i][1])*f]}
 function lvT(lv,Z){const n=Z.length,i=zoneOf(lv,Z),a=Z[i].from,b=i+1<n?Z[i+1].from:((W.set&&W.set.max_level)||50)+1;return(i+Math.max(0,Math.min(.92,(lv-a)/Math.max(1,b-a))))/n}
-function mapMark(r,x,y,me){const sp=r.species_id?spOf(r.species_id):null,sz=me?42:28,inner=(sp?monsterSVG(sp,r.stage):eggSVG(null)).replace('<svg ',`<svg x="${(x-sz/2).toFixed(1)}" y="${(y-sz/2-1).toFixed(1)}" width="${sz}" height="${sz}" `);
+function mapMark(r,x,y,me){if(r.name==null&&!me)return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#FFFDF6" stroke="#28314B66" stroke-width="2"/>`;const sp=r.species_id?spOf(r.species_id):null,sz=me?42:28,inner=(sp?monsterSVG(sp,r.stage):eggSVG(null)).replace('<svg ',`<svg x="${(x-sz/2).toFixed(1)}" y="${(y-sz/2-1).toFixed(1)}" width="${sz}" height="${sz}" `);
   return `<g class="mk" data-act="mapWho" data-n="${esc(r.name)} · Lv.${r.level}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sz/2+3}" fill="${me?'#FFD27A':'#FFFDF6'}" stroke="${me?'#A8781F':'#28314B66'}" stroke-width="2"/>${inner}`+
     (me?`<rect x="${(x-30).toFixed(1)}" y="${(y+sz/2+5).toFixed(1)}" width="60" height="17" rx="8.5" fill="#28314B"/><text x="${x.toFixed(1)}" y="${(y+sz/2+17).toFixed(1)}" text-anchor="middle" class="mkme">나 · Lv.${r.level}</text>`
        :`<text x="${x.toFixed(1)}" y="${(y+sz/2+13).toFixed(1)}" text-anchor="middle" class="mkn">${esc(r.name)}</text>`)+`</g>`}
@@ -757,7 +764,7 @@ function viewMap(){const Z=mapZones(),n=Z.length,rows=UI.map||[],me=W.me.id,by=Z
     ${lm}<g transform="translate(366,30)"><circle r="17" fill="#FFF8E7" stroke="#A8824E" stroke-width="2"/><path d="M0,-13 L4,0 L0,13 L-4,0Z" fill="#28314B"/><path d="M0,-13 L4,0 L-4,0Z" fill="#D9534F"/><text y="-19" text-anchor="middle" class="zk">N</text></g>${marks}${meMark}</svg>`;
   return `<div class="stack"><div><h2 style="font-size:20px">MONSTER WORLD 맵</h2><p class="muted">레벨이 오르면 길을 따라 위로 올라갑니다.${mine?` 지금 <b>${esc(Z[mz].ko||Z[mz].name)}</b>에 있습니다.${nz?` 다음 지역까지 <b class="num">Lv.${nz.from}</b>입니다.`:''}`:''} 몬스터를 누르면 이름이 보입니다.</p></div>
    <div class="card" style="padding:8px">${svg}</div>
-   <section class="card"><h3>지역별 학생 <small>${rows.length}명</small></h3>${Z.map((z,i)=>({z,i})).reverse().map(({z,i})=>`<div class="mi"><div class="chip num" style="background:${ZC[i%5]}55">${i+1}</div><div class="t"><b>${esc(z.name)} <span class="tiny muted">${esc(z.ko||'')} · Lv.${z.from}+</span></b><span>${by[i].map(r=>r.student_id===me?`<b>${esc(r.name)} Lv.${r.level}</b>`:`${esc(r.name)} Lv.${r.level}`).join(' · ')||'아직 도착한 학생이 없습니다.'}</span></div><span class="pill gray">${by[i].length}명</span></div>`).join('')}</section></div>`}
+   <section class="card"><h3>지역별 학생 <small>${rows.length}명</small></h3>${Z.map((z,i)=>({z,i})).reverse().map(({z,i})=>`<div class="mi"><div class="chip num" style="background:${ZC[i%5]}55">${i+1}</div><div class="t"><b>${esc(z.name)} <span class="tiny muted">${esc(z.ko||'')} · Lv.${z.from}+</span></b><span>${by[i].filter(r=>r.name!=null||r.student_id===me).map(r=>r.student_id===me?`<b>${esc(r.name)} Lv.${r.level}</b>`:`${esc(r.name)} Lv.${r.level}`).join(' · ')||(by[i].length?'이름 비공개':'아직 도착한 학생이 없습니다.')}</span></div><span class="pill gray">${by[i].length}명</span></div>`).join('')}</section></div>`}
 const actRow=(k,l,x,sf)=>`<tr data-k="${esc(k)}"><td><input class="inp al" maxlength="24" value="${esc(l)}" aria-label="활동 이름" placeholder="예: 발표 참여"></td><td class="r"><input class="inp ax num" type="number" min="-5000" max="5000" step="1" value="${x}" aria-label="XP" style="width:96px"></td><td>${k==='reading'?'<span class="tiny muted">독서 탭</span>':`<input type="checkbox" class="as" aria-label="학생 요청" ${sf?'checked':''}>`}</td><td class="r">${k==='reading'?'':'<button type="button" class="btn sm d" data-act="actDel">삭제</button>'}</td></tr>`;
 function readActs(){const ax={},lb={},list=[],self=[];for(const tr of document.querySelectorAll('#actRows tr[data-k]')){const k=tr.dataset.k,l=tr.querySelector('.al').value.trim(),x=Number(tr.querySelector('.ax').value);
     if(!l)throw new Error('비어 있는 활동 이름이 있습니다. 이름을 넣거나 그 줄을 삭제해 주세요.');if(!Number.isInteger(x)||x<-5000||x>5000)throw new Error(`${l}: XP는 -5000~5000 사이 정수로 입력해 주세요.`);
@@ -859,7 +866,7 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
         zones.forEach((z,i)=>{if(!z.name)throw new Error('지역 이름을 입력해 주세요.');if(i===0?z.from!==1:!(z.from>zones[i-1].from))throw new Error('마을 시작 레벨은 위에서 아래로 점점 커져야 합니다.')})}catch(err){return toast(err.message,true)}const{ax,lb,list,self}=A;const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
       document.body.classList.add('busy');const sg=$('#sStg').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8);
       const cur=k=>k==='stages'?stg():k==='activity_labels'?(W.set.activity_labels||{}):W.set[k];
-      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
+      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['map_name_mode',$('#sMapName').value],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
     else if(id==='fRate'){const v=Number($('#rate').value);if(!(v>=0&&v<=100))return toast('환산 기준은 0~100 사이로 입력해 주세요.',true);await call('set_setting',{key:'point_rate',value:v},'환산 기준을 적용했습니다.')}
     else if(id==='fRevoke'){const why=$('#rvWhy').value.trim(),d=f.dataset;closeModal();const ok=d.m?await call('revoke_mission',{id:d.m,reason:why},'지급을 취소했습니다.'):await call('revoke_book',{id:d.b,reason:why},'독서 실적을 취소했습니다.');if(ok){(W.ledgerRevoked=W.ledgerRevoked||new Set()).add(d.m||d.b);render()}}
     else if(id==='fAddBook'){const sid=f.dataset.id;if(await call('add_book',{student:sid,title:$('#abTitle').value,comp:null},'독서 실적을 등록했습니다.'))openStudent(sid)}
