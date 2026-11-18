@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.19: 친구 대결(같은 10문제를 각자 풀고 점수 비교, 서버가 시간 측정, 코인만, 하루 3번, 48시간 지나면 취소, 처음엔 꺼 둠)
 -- v2.18: 친구 집 방문 + 스티커(정해진 6종, 친구마다 하루 1개, 자유 글쓰기 없음). 방문은 임시 열쇠(visit_key)로만, 이름은 지도 표시 방식 그대로
 -- v2.17: 코인·상점·내 집(가구·벽지·바닥·몬스터 액세서리). 활동 승인·배틀 승리·연속 기록·진화로 코인, 반려·취소 시 회수
 -- v2.16: 배틀에 내 몬스터 힘 반영(레벨·진화·어휘 스탯 치명타), 문제 유형 섞기(뜻 고르기·영어 고르기·듣기·철자)
@@ -335,6 +336,36 @@ create table if not exists mw_stickers (
 );
 create index if not exists mw_stickers_to on mw_stickers(to_student, created_at desc);
 
+-- v2.19 친구 대결(정답 포함 → 클라이언트 직접 읽기 금지)
+create table if not exists mw_duels (
+  id uuid primary key default gen_random_uuid(),
+  academy_id uuid not null,
+  a uuid not null references mw_profiles(id) on delete cascade,   -- 신청한 학생
+  b uuid not null references mw_profiles(id) on delete cascade,   -- 받은 학생
+  items jsonb not null,
+  status text not null default 'a_playing' check (status in ('a_playing','waiting','b_playing','done','expired')),
+  result text check (result in ('a','b','draw')),
+  day date not null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null,
+  finished_at timestamptz
+);
+create index if not exists mw_duels_a on mw_duels(a, created_at desc);
+create index if not exists mw_duels_b on mw_duels(b, created_at desc);
+create table if not exists mw_duel_play (
+  duel_id uuid not null references mw_duels(id) on delete cascade,
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  qn int not null default 1,
+  served_at timestamptz,                             -- 지금 문제를 보낸 시각(빠르기 계산)
+  correct int not null default 0,
+  raw int not null default 0,
+  score int not null default 0,
+  ms bigint not null default 0,
+  power int not null default 10,
+  done boolean not null default false,
+  primary key (duel_id, student_id)
+);
+
 create table if not exists mw_word_misses (
   student_id uuid not null references mw_profiles(id) on delete cascade,
   academy_id uuid not null,
@@ -406,6 +437,7 @@ begin
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
     "home_visit": true,
+    "duel": {"on":false,"win":15,"draw":5,"lose":3,"daily":3,"hours":48,"power_max":20},
     "coins": {"activity":5,"battle_first":10,"battle_rewin":2,"gate_first":30,"streak":20,"evo_elite":50,"evo_legend":100},
     "battle": {"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":120,"gate_hp":240,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab","dmg_base":10,"dmg_lv_div":5,"dmg_lv_max":10,"dmg_elite":3,"dmg_legend":6,"crit_per":200,"crit_max":25,"mix_rev":25,"mix_listen":25},
     "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
@@ -570,6 +602,8 @@ alter table mw_shop_items  enable row level security;
 alter table mw_inventory   enable row level security;
 alter table mw_homes       enable row level security;
 alter table mw_stickers    enable row level security;
+alter table mw_duels       enable row level security;
+alter table mw_duel_play   enable row level security;
 
 drop policy if exists mw_academies_read on mw_academies;
 create policy mw_academies_read on mw_academies for select to authenticated using (id = mw_my_academy());
@@ -1326,7 +1360,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle','coins','home_visit') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle','coins','home_visit','duel') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -1353,6 +1387,13 @@ begin
            or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
            or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
     raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
+  if p_key = 'duel' and (jsonb_typeof(p_value) <> 'object' or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key not in ('on','win','draw','lose','daily','hours','power_max')
+           or case when e.key = 'on' then jsonb_typeof(e.value) <> 'boolean'
+                   else jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric <> round((e.value #>> '{}')::numeric)
+                        or (e.value #>> '{}')::numeric not between (case when e.key in ('daily','hours') then 1 else 0 end) and 1000 end)) then
+    raise exception '친구 대결 설정이 올바르지 않습니다.'; end if;
   if p_key = 'home_visit' and jsonb_typeof(p_value) <> 'boolean' then raise exception '집 방문 설정이 올바르지 않습니다.'; end if;
   if p_key = 'coins' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -2030,6 +2071,201 @@ begin
                         from (select * from mw_stickers where from_student = p_student order by created_at desc limit 20) x join mw_profiles p on p.id = x.to_student), '[]'::jsonb));
 end $$;
 
+-- ---------- v2.19 친구 대결 ----------
+create or replace function mw_duel_cfg(p_ac uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select '{"on":false,"win":15,"draw":5,"lose":3,"daily":3,"hours":48,"power_max":20}'::jsonb || coalesce(mw_setting(p_ac, 'duel'), '{}'::jsonb);
+$$;
+
+-- 내 몬스터 공격력(배틀과 같은 공식)
+create or replace function mw_my_power(p_student uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce((c ->> 'dmg_base')::int + least((c ->> 'dmg_lv_max')::int, m.level / greatest(1, (c ->> 'dmg_lv_div')::int))
+         + case m.stage when 3 then (c ->> 'dmg_legend')::int when 2 then (c ->> 'dmg_elite')::int else 0 end, 10)
+    from mw_profiles p join mw_monsters m on m.id = p.active_monster, mw_battle_cfg(p.academy_id) c
+   where p.id = p_student;
+$$;
+
+-- 지금 문제(보낼 때 시각을 기록. 한 번 기록되면 다시 불러도 바뀌지 않음)
+create or replace function mw_duel_view(p_duel uuid, p_serve boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d mw_duels; pl mw_duel_play; it jsonb; t text; v_other uuid; op mw_duel_play; v_cfg jsonb;
+begin
+  select * into d from mw_duels where id = p_duel and (a = auth.uid() or b = auth.uid());
+  if not found then raise exception '대결을 찾을 수 없습니다.'; end if;
+  select * into pl from mw_duel_play where duel_id = d.id and student_id = auth.uid();
+  v_other := case when d.a = auth.uid() then d.b else d.a end;
+  select * into op from mw_duel_play where duel_id = d.id and student_id = v_other;
+  if pl.duel_id is not null and p_serve and not pl.done and pl.qn <= jsonb_array_length(d.items) then
+    if pl.served_at is null then update mw_duel_play set served_at = clock_timestamp() where duel_id = d.id and student_id = auth.uid(); end if;
+    it := d.items -> (pl.qn - 1); t := it ->> 't';
+  end if;
+  v_cfg := mw_duel_cfg(d.academy_id);
+  return jsonb_build_object('id', d.id, 'status', d.status, 'role', case when d.a = auth.uid() then 'a' else 'b' end,
+    'other', mw_pub_name(v_other), 'total', jsonb_array_length(d.items), 'expires_at', d.expires_at,
+    'n', pl.qn, 'my_score', pl.score, 'my_correct', pl.correct, 'my_done', coalesce(pl.done, false),
+    'bonus', case when pl.power is null then 0 else least((v_cfg ->> 'power_max')::int, greatest(0, (pl.power - 10) * 2)) end,
+    'other_score', case when d.status = 'done' then op.score end, 'other_correct', case when d.status = 'done' then op.correct end,
+    'result', case when d.status <> 'done' then null when d.result = 'draw' then 'draw' when (d.result = 'a') = (d.a = auth.uid()) then 'win' else 'lose' end,
+    'q', case when it is null then null else jsonb_build_object('n', pl.qn, 't', t,
+           'prompt', case when t = 'rev' then it ->> 'ko' when t = 'listen' then null else it ->> 'en' end,
+           'say', case when t = 'listen' then it ->> 'en' end,
+           'options', (select jsonb_agg(x order by random()) from jsonb_array_elements(case when t = 'rev' then it -> 'oe' else it -> 'o' end) x)) end);
+end $$;
+
+-- 대결 마무리: 점수 비교, 코인(하루 daily 번까지)
+create or replace function mw_duel_finish(p_duel uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare d mw_duels; pa mw_duel_play; pb mw_duel_play; v_cfg jsonb; v_res text; s uuid; v_amt int;
+begin
+  select * into d from mw_duels where id = p_duel for update;
+  if d.status = 'done' then return; end if;
+  select * into pa from mw_duel_play where duel_id = d.id and student_id = d.a;
+  select * into pb from mw_duel_play where duel_id = d.id and student_id = d.b;
+  v_res := case when coalesce(pa.score, 0) > coalesce(pb.score, 0) then 'a' when coalesce(pa.score, 0) < coalesce(pb.score, 0) then 'b' else 'draw' end;
+  update mw_duels set status = 'done', result = v_res, finished_at = now() where id = d.id;
+  v_cfg := mw_duel_cfg(d.academy_id);
+  foreach s in array array[d.a, d.b] loop
+    if (select count(*) from mw_coins c where c.student_id = s and c.ref like 'du:%' and c.amount > 0
+         and (c.created_at at time zone 'Asia/Seoul')::date = mw_seoul_today()) < (v_cfg ->> 'daily')::int then
+      v_amt := (v_cfg ->> (case when v_res = 'draw' then 'draw' when (v_res = 'a') = (s = d.a) then 'win' else 'lose' end))::int;
+      perform mw_coin_add(s, v_amt, case when v_res = 'draw' then '대결 무승부' when (v_res = 'a') = (s = d.a) then '대결 승리' else '대결 참여' end, 'du:' || d.id);
+    end if;
+  end loop;
+end $$;
+
+-- 48시간이 지난 대결: 신청한 학생이 끝냈고 받은 학생이 풀던 중이면 그 점수로 마무리, 아니면 취소
+create or replace function mw_duel_expire(p_student uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare d mw_duels;
+begin
+  for d in select * from mw_duels where (a = p_student or b = p_student) and status in ('a_playing','waiting','b_playing') and expires_at < now() for update loop
+    if d.status = 'b_playing' then perform mw_duel_finish(d.id);
+    else update mw_duels set status = 'expired', finished_at = now() where id = d.id; end if;
+  end loop;
+end $$;
+
+-- 학생: 대결 신청(서버가 두 학생이 함께 배운 단어에서 10문제를 정함)
+create or replace function mw_duel_create(p_key text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid := mw_my_academy(); v_cfg jsonb; v_bc jsonb; t mw_profiles; pa mw_word_pos; pb mw_word_pos; v_lb int; v_lu int;
+        r record; v_items jsonb := '[]'::jsonb; v_i int := 0; v_opts jsonb; v_opte jsonb; v_rnd numeric; v_t text; v_id uuid;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  v_cfg := mw_duel_cfg(v_ac);
+  if not coalesce((v_cfg ->> 'on')::boolean, false) or not mw_visit_ok(v_ac) then raise exception '지금은 친구 대결이 꺼져 있어요.'; end if;
+  perform 1 from mw_profiles where id = auth.uid() for update;
+  select * into t from mw_profiles where visit_key = p_key and academy_id = v_ac and role = 'student' and active;
+  if not found then raise exception '찾을 수 없는 친구입니다.'; end if;
+  if t.id = auth.uid() then raise exception '나와는 대결할 수 없어요.'; end if;
+  if (select active_monster from mw_profiles where id = auth.uid()) is null or t.active_monster is null then raise exception '두 사람 모두 몬스터가 있어야 해요.'; end if;
+  perform mw_duel_expire(auth.uid());
+  if (select count(*) from mw_duels where a = auth.uid() and day = mw_seoul_today()) >= (v_cfg ->> 'daily')::int then
+    raise exception '오늘은 대결 신청을 %번 모두 했어요. 내일 또 해요!', (v_cfg ->> 'daily'); end if;
+  if exists (select 1 from mw_duels where day = mw_seoul_today() and ((a = auth.uid() and b = t.id) or (a = t.id and b = auth.uid()))) then
+    raise exception '오늘은 이 친구와 이미 대결했어요.'; end if;
+  select * into pa from mw_word_pos where student_id = auth.uid();
+  select * into pb from mw_word_pos where student_id = t.id;
+  if pa.student_id is null or pb.student_id is null then raise exception '두 사람 모두 단어장 위치가 있어야 해요.'; end if;
+  if (pa.book, pa.unit) <= (pb.book, pb.unit) then v_lb := pa.book; v_lu := pa.unit; else v_lb := pb.book; v_lu := pb.unit; end if;
+  v_bc := mw_battle_cfg(v_ac);
+  for r in
+    with w as (select lower(btrim(en)) as k, min(btrim(en)) as en, string_agg(distinct btrim(ko), ' / ') as ko
+                 from mw_words where academy_id = v_ac and (book, unit) <= (v_lb, v_lu) group by 1)
+    select * from w order by random() limit 10
+  loop
+    select coalesce(jsonb_agg(z.ko), '[]'::jsonb), coalesce(jsonb_agg(z.en), '[]'::jsonb) into v_opts, v_opte from (
+      select y.ko, y.en from (select string_agg(distinct btrim(w2.ko), ' / ') as ko, min(btrim(w2.en)) as en
+                                from mw_words w2 where w2.academy_id = v_ac and (w2.book, w2.unit) <= (v_lb, v_lu) and lower(btrim(w2.en)) <> r.k
+                               group by lower(btrim(w2.en))) y
+       where y.ko <> r.ko order by random() limit 3) z;
+    v_opts := v_opts || jsonb_build_array(r.ko); v_opte := v_opte || jsonb_build_array(r.en);
+    v_rnd := random() * 100;
+    v_t := case when v_rnd < (v_bc ->> 'mix_rev')::numeric then 'rev' when v_rnd < (v_bc ->> 'mix_rev')::numeric + (v_bc ->> 'mix_listen')::numeric then 'listen' else 'mc' end;
+    v_items := v_items || jsonb_build_array(jsonb_build_object('k', r.k, 'en', r.en, 'ko', r.ko, 't', v_t, 'o', v_opts, 'oe', v_opte));
+    v_i := v_i + 1;
+  end loop;
+  if v_i < 10 then raise exception '함께 배운 단어가 아직 10개가 안 돼요.'; end if;
+  insert into mw_duels(academy_id, a, b, items, day, expires_at)
+  values (v_ac, auth.uid(), t.id, v_items, mw_seoul_today(), now() + make_interval(hours => (v_cfg ->> 'hours')::int))
+  returning id into v_id;
+  insert into mw_duel_play(duel_id, student_id, power) values (v_id, auth.uid(), mw_my_power(auth.uid()));
+  return mw_duel_view(v_id, true);
+end $$;
+
+-- 학생: 받은 대결 시작(또는 이어서) / 지금 문제 받기
+create or replace function mw_duel_play(p_duel uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d mw_duels;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  perform mw_duel_expire(auth.uid());
+  select * into d from mw_duels where id = p_duel and (a = auth.uid() or b = auth.uid()) for update;
+  if not found then raise exception '대결을 찾을 수 없습니다.'; end if;
+  if d.status = 'expired' then raise exception '시간이 지나 취소된 대결이에요.'; end if;
+  if d.b = auth.uid() and d.status = 'waiting' then
+    update mw_duels set status = 'b_playing' where id = d.id;
+    insert into mw_duel_play(duel_id, student_id, power) values (d.id, auth.uid(), mw_my_power(auth.uid())) on conflict do nothing;
+  end if;
+  if d.b = auth.uid() and d.status = 'a_playing' then raise exception '친구가 아직 문제를 풀고 있어요.'; end if;
+  return mw_duel_view(d.id, true);
+end $$;
+
+-- 학생: 답하기(서버가 채점·시간 측정). 다음 문제는 mw_duel_play 로 받음(받는 순간부터 시간 측정)
+create or replace function mw_duel_answer(p_duel uuid, p_n int, p_answer text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d mw_duels; pl mw_duel_play; it jsonb; t text; v_ok boolean; v_ms bigint; v_pts int := 0; v_cfg jsonb; v_total int;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  select * into d from mw_duels where id = p_duel and (a = auth.uid() or b = auth.uid()) for update;
+  if not found then raise exception '대결을 찾을 수 없습니다.'; end if;
+  if d.status not in ('a_playing','b_playing') or (d.status = 'a_playing') <> (d.a = auth.uid()) then raise exception '지금은 답할 수 없는 대결입니다.'; end if;
+  select * into pl from mw_duel_play where duel_id = d.id and student_id = auth.uid() for update;
+  if pl.done or p_n is distinct from pl.qn or pl.served_at is null then raise exception '이미 답한 문제입니다.'; end if;
+  v_total := jsonb_array_length(d.items);
+  it := d.items -> (pl.qn - 1); t := it ->> 't';
+  v_ok := case when t = 'rev' then lower(btrim(coalesce(p_answer, ''))) = lower(btrim(it ->> 'en')) else coalesce(p_answer, '') = it ->> 'ko' end;
+  v_ms := greatest(0, (extract(epoch from (clock_timestamp() - pl.served_at)) * 1000)::bigint);
+  if v_ok then v_pts := 100 + case when v_ms <= 3000 then 50 when v_ms <= 6000 then 25 else 0 end; end if;
+  pl.raw := pl.raw + v_pts; pl.correct := pl.correct + case when v_ok then 1 else 0 end; pl.ms := pl.ms + v_ms; pl.qn := pl.qn + 1;
+  v_cfg := mw_duel_cfg(d.academy_id);
+  pl.score := round(pl.raw * (1 + least((v_cfg ->> 'power_max')::int, greatest(0, (pl.power - 10) * 2)) / 100.0))::int;   -- 공격력 보너스 최대 +20%
+  pl.done := pl.qn > v_total;
+  update mw_duel_play set raw = pl.raw, correct = pl.correct, ms = pl.ms, qn = pl.qn, score = pl.score, done = pl.done, served_at = null
+   where duel_id = d.id and student_id = auth.uid();
+  if pl.done then
+    if d.a = auth.uid() then update mw_duels set status = 'waiting' where id = d.id;
+    else perform mw_duel_finish(d.id); end if;
+  end if;
+  return mw_duel_view(d.id, false) || jsonb_build_object('correct', v_ok, 'pts', v_pts, 'ms', v_ms, 'word', it ->> 'en',
+    'answer', case when t = 'rev' then it ->> 'en' else it ->> 'ko' end);
+end $$;
+
+-- 학생: 내 대결 목록(받은 신청·기다리는 중·결과)
+create or replace function mw_duels() returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  perform mw_duel_expire(auth.uid());
+  return coalesce((select jsonb_agg(mw_duel_view(x.id, false) order by x.created_at desc)
+                     from (select id, created_at from mw_duels where (a = auth.uid() or (b = auth.uid() and status <> 'a_playing'))
+                            order by created_at desc limit 15) x), '[]'::jsonb);
+end $$;
+
+-- 선생님: 학생의 대결 기록(실명)
+create or replace function mw_duels_of(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform mw_need_student(p_student);
+  return coalesce((select jsonb_agg(jsonb_build_object('other', p.display_name, 'status', d.status,
+            'result', case when d.status <> 'done' then null when d.result = 'draw' then 'draw' when (d.result = 'a') = (d.a = p_student) then 'win' else 'lose' end,
+            'my', (select score from mw_duel_play where duel_id = d.id and student_id = p_student),
+            'their', (select score from mw_duel_play where duel_id = d.id and student_id <> p_student),
+            'at', d.created_at) order by d.created_at desc)
+     from (select * from mw_duels where a = p_student or b = p_student order by created_at desc limit 20) d
+     join mw_profiles p on p.id = case when d.a = p_student then d.b else d.a end), '[]'::jsonb);
+end $$;
+
 -- ---------- 8. 함수 실행 권한 ----------
 do $$
 declare f record;
@@ -2044,7 +2280,7 @@ begin
                          'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info',
                          'mw_seoul_today','mw_wd_idx','mw_battle_cfg','mw_battle_shards','mw_battle_day_ok','mw_battle_streak',
                          'mw_battle_mult','mw_word_backlog','mw_word_advance','mw_battle_recheck','mw_battle_state','mw_battle_reward',
-                         'mw_coin_cfg','mw_coin_balance','mw_coin_add','mw_coin_revoke','mw_coin_on_approve','mw_visit_ok','mw_pub_name') then
+                         'mw_coin_cfg','mw_coin_balance','mw_coin_add','mw_coin_revoke','mw_coin_on_approve','mw_visit_ok','mw_pub_name','mw_duel_cfg','mw_my_power','mw_duel_view','mw_duel_finish','mw_duel_expire') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
