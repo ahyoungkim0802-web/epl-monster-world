@@ -16,7 +16,7 @@
 body{background:var(--ground);color:var(--ink);font-family:var(--body);margin:0;
   padding-block:24px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
 .sheet{background:var(--paper);color:var(--ink);width:210mm;max-width:100%;min-height:297mm;margin:0 auto 24px;
-  padding:10mm 12mm 9mm;box-shadow:0 2px 14px #0002;display:flex;flex-direction:column;gap:3.4mm;font-size:9.4pt;line-height:1.42}
+  padding:9mm 12mm 7mm;box-shadow:0 2px 14px #0002;display:flex;flex-direction:column;gap:3mm;font-size:9.4pt;line-height:1.42}
 .sheet>*{flex-shrink:0}
 h1,h2,h3{margin:0;text-wrap:balance}
 p{margin:0}
@@ -37,7 +37,7 @@ b{font-weight:700}
 .fill{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
 .fill span{flex:1;min-width:90px;border-bottom:1.5px dashed var(--sub);height:22px;font-size:8pt;color:var(--sub)}
 table{border-collapse:collapse;width:100%;font-size:8.8pt;font-variant-numeric:tabular-nums}
-th,td{padding:.9mm 2mm;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th,td{padding:.55mm 2mm;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
 th{font-size:8.4pt;color:var(--sub);font-weight:500}
 td.r,th.r{text-align:right}
 .minus{color:var(--coral);font-weight:700}
@@ -113,6 +113,7 @@ td.r,th.r{text-align:right}
         <thead><tr><th>학생이 요청 (다 했어요, 하루 1번)</th><th class="r">XP</th></tr></thead>
         <tbody>
           <tr><td>단어시험</td><td class="r plus">+50</td></tr>
+          <tr><td>클래스카드 학습</td><td class="r plus">+50</td></tr>
           <tr><td>교재</td><td class="r plus">+200</td></tr>
           <tr><td>북라이팅</td><td class="r plus">+30</td></tr>
           <tr><td>북퀴즈</td><td class="r plus">+30</td></tr>
@@ -154,8 +155,9 @@ td.r,th.r{text-align:right}
         <div class="ar">Lv.35<br>🔶 1개 또는 💠 2개</div>
         <div class="st"><b>Legend</b></div>
       </div>
+      <p class="small"><b>💠 진화석 받는 법:</b> AR 북레벨 +1, 또는 <b>클래스카드 평일 7일 연속</b>(승인 기준, 주말은 세지도 끊지도 않음).</p>
       <p class="small"><b>진화 보너스:</b> Elite <b class="plus">+500</b> · Legend <b class="plus">+1,000</b> 칭찬모아. 주간 정산에 자동으로 더해집니다(XP는 아님).</p>
-      <p class="small muted">돌을 어느 몬스터에 쓸지는 학생이 고릅니다. AR · NELT 지급을 취소하면 아직 쓰지 않은 돌도 빠집니다.</p>
+      <p class="small muted">돌을 쓸 몬스터는 학생이 고릅니다. 지급을 취소하면 안 쓴 돌도 빠집니다.</p>
     </div>
   </div>
 
@@ -206,7 +208,7 @@ td.r,th.r{text-align:right}
   <div class="cols">
     <div class="box">
       <h2>✅ "다 했어요"를 누를 수 있는 것</h2>
-      <div class="chips"><span class="chip">단어시험 +50</span><span class="chip">교재 +200</span><span class="chip">북라이팅 +30</span><span class="chip">북퀴즈 +30</span><span class="chip">숙제 +20</span></div>
+      <div class="chips"><span class="chip">단어시험 +50</span><span class="chip">클래스카드 +50</span><span class="chip">교재 +200</span><span class="chip">북라이팅 +30</span><span class="chip">북퀴즈 +30</span><span class="chip">숙제 +20</span></div>
       <p>활동마다 <b>하루에 1번</b>씩 누를 수 있어. 진짜 끝냈을 때만 누르자. 선생님이 확인해.</p>
       <p>📚 원서를 다 읽으면 <b>독서</b> 탭에 책 제목을 적어 줘. (+20)</p>
     </div>
@@ -230,7 +232,7 @@ td.r,th.r{text-align:right}
       <div class="ar">Lv.35가 되고<br>🔶 전설석 1개 (또는 💠 2개)</div>
       <div class="st"><b>Legend</b>최강!</div>
     </div>
-    <div class="bubble"><span style="font-size:20pt">💠</span><p><b>AR 북레벨이 1 오르면 진화석</b>, <b>NELT 레벨이 1 오르면 전설석</b>을 받아. 돌을 어떤 몬스터에 쓸지는 <b>내가 골라</b>. 홈에서 <b>"진화시키기"</b>를 눌러 봐!<br>진화하면 <b>칭찬모아 보너스</b>도 있어! Elite <b class="plus">+500</b> · Legend <b class="plus">+1,000</b></p></div>
+    <div class="bubble"><span style="font-size:20pt">💠</span><p><b>AR 북레벨이 1 오르면 진화석</b>, <b>NELT 레벨이 1 오르면 전설석</b>을 받아. 🔥 <b>클래스카드를 평일 7일 연속</b> 해도 진화석! 돌을 어떤 몬스터에 쓸지는 <b>내가 골라</b>. 홈에서 <b>"진화시키기"</b>를 눌러 봐!<br>진화하면 <b>칭찬모아 보너스</b>도 있어! Elite <b class="plus">+500</b> · Legend <b class="plus">+1,000</b></p></div>
   </div>
 
   <div class="cols">
@@ -253,7 +255,7 @@ td.r,th.r{text-align:right}
     </div>
   </div>
 
-  <div class="tip">💡 <b>매일 조금씩!</b> 매일 공부하면 홈에 연속 기록이 쌓여. 캘린더 탭에서 내가 공부한 날을 볼 수 있어.</div>
+  <div class="tip">💡 <b>매일 조금씩!</b> 홈의 <b>🔥 연속 기록</b>에서 클래스카드 며칠째인지 볼 수 있어. 주말은 쉬어도 안 끊겨. 캘린더 탭에서 내가 공부한 날을 볼 수 있어.</div>
 
   <div class="foot"><span>MONSTER WORLD · 학생용</span><span>궁금한 건 선생님께 물어봐!</span></div>
 </section>
