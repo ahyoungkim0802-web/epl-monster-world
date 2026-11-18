@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.17: 코인·상점·내 집(가구·벽지·바닥·몬스터 액세서리). 활동 승인·배틀 승리·연속 기록·진화로 코인, 반려·취소 시 회수
 -- v2.16: 배틀에 내 몬스터 힘 반영(레벨·진화·어휘 스탯 치명타), 문제 유형 섞기(뜻 고르기·영어 고르기·듣기·철자)
 -- v2.15: 단어 배틀(단어장 업로드, 단어 동굴, 서버 출제·채점, 배틀 XP·진화석 조각)
 -- v2.14: 담당 선생님 변경을 모든 선생님이 할 수 있게. 선생님 이름 목록(mw_teacher_names, 이름만)
@@ -233,6 +234,92 @@ alter table mw_battles add column if not exists crit numeric not null default 0;
 create index if not exists mw_battles_student on mw_battles(student_id, day);
 create index if not exists mw_battles_won on mw_battles(student_id, book, unit, kind) where status = 'won' and not revoked;
 
+
+-- v2.17 코인·상점·내 집 (게임 안 화폐. 칭찬모아와 별개, 학생끼리 주고받기·현금 결제 없음)
+create table if not exists mw_coins (
+  id uuid primary key default gen_random_uuid(),
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  amount int not null,
+  reason text not null default '',
+  ref text,                                        -- 같은 일로 두 번 받지 않게(예: m:<미션>, bt:<배틀>, buy:<구매>)
+  created_at timestamptz not null default now()
+);
+create unique index if not exists mw_coins_ref on mw_coins(student_id, ref) where ref is not null;
+create index if not exists mw_coins_student on mw_coins(student_id, created_at desc);
+
+create table if not exists mw_shop_items (          -- 상점 목록(모든 학원 공통)
+  id text primary key,
+  kind text not null check (kind in ('furniture','wall','floor','acc')),
+  name text not null,
+  price int not null check (price between 0 and 100000),
+  min_level int not null default 1,
+  sort int not null default 0,
+  enabled boolean not null default true
+);
+insert into mw_shop_items(id, kind, name, price, min_level, sort) values
+ ('bed','furniture','침대',120,1,0),
+ ('desk','furniture','책상',80,1,1),
+ ('chair','furniture','의자',40,1,2),
+ ('bookshelf','furniture','책장',150,1,3),
+ ('sofa','furniture','소파',180,1,4),
+ ('lamp','furniture','스탠드',50,1,5),
+ ('plant','furniture','화분',30,1,6),
+ ('cactus','furniture','선인장',30,1,7),
+ ('rug','furniture','러그',60,1,8),
+ ('aquarium','furniture','어항',250,1,9),
+ ('trophy','furniture','트로피',200,10,10),
+ ('poster','furniture','포스터',40,1,11),
+ ('window','furniture','창문',70,1,12),
+ ('clock','furniture','벽시계',50,1,13),
+ ('globe','furniture','지구본',90,1,14),
+ ('piano','furniture','피아노',300,15,15),
+ ('tv','furniture','TV',220,1,16),
+ ('beanbag','furniture','빈백',70,1,17),
+ ('telescope','furniture','망원경',260,20,18),
+ ('drawers','furniture','서랍장',90,1,19),
+ ('guitar','furniture','기타',160,1,20),
+ ('petbed','furniture','몬스터 쿠션',60,1,21),
+ ('pennant','furniture','깃발',40,1,22),
+ ('fireplace','furniture','벽난로',280,25,23),
+ ('wall_cream','wall','크림 벽지',0,1,24),
+ ('wall_mint','wall','민트 벽지',60,1,25),
+ ('wall_sky','wall','하늘 벽지',60,1,26),
+ ('wall_lilac','wall','라일락 벽지',60,1,27),
+ ('wall_stripe','wall','줄무늬 벽지',100,1,28),
+ ('wall_star','wall','밤하늘 벽지',150,10,29),
+ ('floor_wood','floor','나무 바닥',0,1,30),
+ ('floor_tile','floor','타일 바닥',60,1,31),
+ ('floor_grass','floor','잔디 바닥',80,1,32),
+ ('floor_carpet','floor','카펫 바닥',80,1,33),
+ ('floor_marble','floor','대리석 바닥',150,10,34),
+ ('floor_cloud','floor','구름 바닥',200,20,35),
+ ('acc_hat','acc','모자',80,1,36),
+ ('acc_ribbon','acc','리본',60,1,37),
+ ('acc_glasses','acc','안경',70,1,38),
+ ('acc_scarf','acc','목도리',70,1,39),
+ ('acc_headphones','acc','헤드폰',120,1,40),
+ ('acc_flower','acc','꽃',50,1,41),
+ ('acc_star','acc','별 배지',200,10,42),
+ ('acc_crown','acc','왕관',300,20,43)
+on conflict (id) do update set kind = excluded.kind, name = excluded.name, price = excluded.price, min_level = excluded.min_level, sort = excluded.sort;
+
+create table if not exists mw_inventory (
+  student_id uuid not null references mw_profiles(id) on delete cascade,
+  item_id text not null references mw_shop_items(id),
+  qty int not null default 1,
+  acquired_at timestamptz not null default now(),
+  primary key (student_id, item_id)
+);
+
+create table if not exists mw_homes (
+  student_id uuid primary key references mw_profiles(id) on delete cascade,
+  wall text not null default 'wall_cream',
+  floor text not null default 'floor_wood',
+  layout jsonb not null default '[]'::jsonb,       -- [{"i": 가구 id, "x": 0~7, "y": 0~5}]
+  updated_at timestamptz not null default now()
+);
+alter table mw_monsters add column if not exists acc text;   -- 씌운 액세서리
+
 create table if not exists mw_word_misses (
   student_id uuid not null references mw_profiles(id) on delete cascade,
   academy_id uuid not null,
@@ -303,6 +390,7 @@ begin
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
     "activity_stones": {"ar":"evo","nelt":"legend"},
+    "coins": {"activity":5,"battle_first":10,"battle_rewin":2,"gate_first":30,"streak":20,"evo_elite":50,"evo_legend":100},
     "battle": {"first_xp":30,"rewin_xp":5,"gate_xp":100,"gate_rewin_xp":5,"shard_first":5,"shard_rewin":1,"shard_gate":20,"shard_gate_rewin":1,"shards_per_stone":100,"over_ratio":0.25,"streak":[{"days":3,"mult":1.2},{"days":7,"mult":1.5},{"days":30,"mult":2}],"hearts":3,"hp":120,"gate_hp":240,"pool":10,"gate_q":20,"combo":5,"advance_act":"vocab","dmg_base":10,"dmg_lv_div":5,"dmg_lv_max":10,"dmg_elite":3,"dmg_legend":6,"crit_per":200,"crit_max":25,"mix_rev":25,"mix_listen":25},
     "streak_rewards": {"classcard":{"days":7,"stone":"evo"}},
     "activity_stats": {"classcard":"vocab","book_reading":"read","book_syntax":"read","book_grammar":"write","book_writing":"write","book_vocab":"vocab","reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
@@ -461,12 +549,18 @@ alter table mw_words       enable row level security;   -- 정책 없음 = 서�
 alter table mw_word_pos    enable row level security;
 alter table mw_battles     enable row level security;
 alter table mw_word_misses enable row level security;
+alter table mw_coins       enable row level security;
+alter table mw_shop_items  enable row level security;
+alter table mw_inventory   enable row level security;
+alter table mw_homes       enable row level security;
 
 drop policy if exists mw_academies_read on mw_academies;
 create policy mw_academies_read on mw_academies for select to authenticated using (id = mw_my_academy());
 drop policy if exists mw_profiles_read on mw_profiles;
 create policy mw_profiles_read on mw_profiles for select to authenticated
   using (id = auth.uid() or (mw_is_teacher() and academy_id = mw_my_academy() and (role = 'student' or mw_is_admin())));   -- 다른 선생님 계정은 원장만 봄
+drop policy if exists mw_shop_read on mw_shop_items;
+create policy mw_shop_read on mw_shop_items for select to authenticated using (true);
 drop policy if exists mw_species_read on mw_species;
 create policy mw_species_read on mw_species for select to authenticated using (true);
 drop policy if exists mw_settings_read on mw_settings;
@@ -625,6 +719,31 @@ $$;
 -- 연속 기록(내부용). streak_rewards = {활동: {days, stone}}. 평일(월~금)만 세고 주말은 건너뜀(끊기지 않음).
 --   len: 지금 이어지고 있는 연속 일수(승인 + 확인 중 포함, 오늘 아직 안 했으면 어제까지 이어진 기록)
 --   earned: 승인된 날만으로 만든 연속 구간마다 days일당 돌 1개. 지급 순서와 상관없이 기록에서 계산하므로 중복 지급이 없음
+-- ---------- v2.17 코인 도우미(내부용) ----------
+create or replace function mw_coin_cfg(p_ac uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select '{"activity":5,"battle_first":10,"battle_rewin":2,"gate_first":30,"streak":20,"evo_elite":50,"evo_legend":100}'::jsonb || coalesce(mw_setting(p_ac, 'coins'), '{}'::jsonb);
+$$;
+create or replace function mw_coin_balance(p_student uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce(sum(amount), 0)::int from mw_coins where student_id = p_student;
+$$;
+-- 코인 지급(같은 ref 는 한 번만). 0 이하면 아무것도 하지 않음
+create or replace function mw_coin_add(p_student uuid, p_amount int, p_reason text, p_ref text) returns void
+language sql security definer set search_path = public as $$
+  insert into mw_coins(student_id, amount, reason, ref)
+  select p_student, p_amount, left(coalesce(p_reason, ''), 60), p_ref where coalesce(p_amount, 0) > 0
+  on conflict (student_id, ref) where ref is not null do nothing;
+$$;
+-- 지급 회수: 그 ref 로 받은 코인을 한 번만 되돌림
+create or replace function mw_coin_revoke(p_student uuid, p_ref text, p_reason text) returns void
+language sql security definer set search_path = public as $$
+  insert into mw_coins(student_id, amount, reason, ref)
+  select c.student_id, -c.amount, left(coalesce(p_reason, ''), 60), p_ref || ':rv' from mw_coins c
+   where c.student_id = p_student and c.ref = p_ref and c.amount > 0
+  on conflict (student_id, ref) where ref is not null do nothing;
+$$;
+
 -- ---------- v2.15 단어 배틀 도우미(내부용) ----------
 create or replace function mw_seoul_today() returns date
 language sql stable as $$ select (now() at time zone 'Asia/Seoul')::date $$;
@@ -899,6 +1018,8 @@ begin
   insert into mw_rewards(student_id, reward_key) values (auth.uid(), 'evo:' || m.id || ':' || v_to || ':' || p_use);
   update mw_monsters set stage = v_to where id = m.id;
   perform mw_badge(auth.uid(), case when v_to = 2 then 'evo_explorer' else 'evo_master' end);
+  perform mw_coin_add(auth.uid(), (mw_coin_cfg(mw_my_academy()) ->> (case when v_to = 2 then 'evo_elite' else 'evo_legend' end))::int,
+                      case when v_to = 2 then 'Elite 진화' else 'Legend 진화' end, 'evo:' || m.id || ':' || v_to);
   perform mw_log('evolve', auth.uid(), jsonb_build_object('monster', m.id, 'stage', v_to, 'use', p_use));
   return v_to;
 end $$;
@@ -1007,6 +1128,7 @@ begin
       update mw_missions set status = 'approved', decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = v_id;
       perform mw_apply_xp(s, v_mon, v_xp, 'grant', p_activity, v_id, null);
       if p_activity = coalesce(mw_battle_cfg(mw_my_academy()) ->> 'advance_act', 'vocab') then perform mw_word_advance(s); end if;
+      if v_xp > 0 then perform mw_coin_on_approve(s, p_activity, 'm:' || v_id); end if;
     end if;
     v_done := v_done + 1;
   end loop;
@@ -1026,6 +1148,7 @@ begin
       update mw_missions set status = 'approved', decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = r.id;
       perform mw_apply_xp(r.student_id, v_mon, r.xp, 'grant', r.activity, r.id, null);
       if r.activity = coalesce(mw_battle_cfg(mw_my_academy()) ->> 'advance_act', 'vocab') then perform mw_word_advance(r.student_id); end if;
+      if r.xp > 0 then perform mw_coin_on_approve(r.student_id, r.activity, 'm:' || r.id); end if;
     else
       update mw_missions set status = 'rejected', decided_by = auth.uid(), decided_at = now() where id = r.id;
       perform mw_battle_recheck(r.student_id, r.due_date);
@@ -1045,6 +1168,7 @@ begin
   update mw_missions set status = 'revoked', note = left(coalesce(p_reason, ''), 200), decided_by = auth.uid(), decided_at = now() where id = r.id;
   perform mw_apply_xp(r.student_id, r.monster_id, -r.xp, 'revoke', coalesce(nullif(p_reason, ''), '승인 취소'), r.id, null);
   perform mw_battle_recheck(r.student_id, r.due_date);
+  perform mw_coin_revoke(r.student_id, 'm:' || r.id, '승인 취소');
 end $$;
 
 create or replace function mw_cancel_mission(p_id uuid) returns void
@@ -1091,6 +1215,7 @@ begin
       if v_mon is null then v_skip := v_skip + 1; continue; end if;
       update mw_books set status = 'approved', comprehension = p_comp, decided_by = auth.uid(), decided_at = now(), monster_id = v_mon where id = r.id;
       perform mw_apply_xp(r.student_id, v_mon, v_xp, 'grant', 'reading', null, r.id);
+      if v_xp > 0 then perform mw_coin_on_approve(r.student_id, 'reading', 'b:' || r.id); end if;
       perform mw_book_rewards(r.student_id);
     else
       update mw_books set status = 'rejected', decided_by = auth.uid(), decided_at = now() where id = r.id;
@@ -1125,6 +1250,7 @@ begin
   update mw_books set status = 'revoked', note = left(coalesce(p_reason, ''), 200), decided_by = auth.uid(), decided_at = now() where id = r.id;
   perform mw_apply_xp(r.student_id, r.monster_id, -coalesce(v_xp, 0), 'revoke', coalesce(nullif(p_reason, ''), '독서 실적 취소'), null, r.id);
   perform mw_battle_recheck(r.student_id, (r.created_at at time zone 'Asia/Seoul')::date);
+  perform mw_coin_revoke(r.student_id, 'b:' || r.id, '독서 실적 취소');
 end $$;
 
 create or replace function mw_adjust_xp(p_student uuid, p_amount int, p_reason text) returns void
@@ -1161,7 +1287,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones','evolve_bonus','streak_rewards','battle','coins') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -1188,6 +1314,12 @@ begin
            or jsonb_typeof(e -> 'at') <> 'number' or coalesce(e ->> 'species', '') !~ '^[a-z0-9_]{1,24}$'
            or case when jsonb_typeof(e -> 'at') = 'number' then (e ->> 'at')::numeric not between 1 and 1000000 or (e ->> 'at')::numeric <> round((e ->> 'at')::numeric) else true end)) then
     raise exception '스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.'; end if;
+  if p_key = 'coins' and (jsonb_typeof(p_value) <> 'object' or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key not in ('activity','battle_first','battle_rewin','gate_first','streak','evo_elite','evo_legend')
+           or jsonb_typeof(e.value) <> 'number' or (e.value #>> '{}')::numeric <> round((e.value #>> '{}')::numeric)
+           or (e.value #>> '{}')::numeric not between 0 and 10000)) then
+    raise exception '코인 설정이 올바르지 않습니다. 0~10000 사이 정수로 입력해 주세요.'; end if;
   if p_key = 'battle' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
         where e.key not in ('first_xp','rewin_xp','gate_xp','gate_rewin_xp','shard_first','shard_rewin','shard_gate','shard_gate_rewin',
@@ -1413,6 +1545,7 @@ begin
   update mw_battles set status = 'quit', finished_at = now() where student_id = p_student and day = p_day and status = 'playing';
   for b in select * from mw_battles where student_id = p_student and day = p_day and status = 'won' and not revoked for update loop
     update mw_battles set revoked = true where id = b.id;
+    perform mw_coin_revoke(p_student, 'bt:' || b.id, '배틀 회수');
     if b.xp > 0 then
       select monster_id into v_mon from mw_ledger where battle_id = b.id and kind = 'battle';
       if v_mon is not null then
@@ -1485,6 +1618,8 @@ begin
     perform mw_apply_xp(b.student_id, v_mon, v_give, 'battle', case when v_gate then '수문장 승리' else 'Unit 승리' end, null, null, b.id);
   else v_give := 0; end if;
   update mw_battles set xp = v_give, shards = v_sh, first_win = v_first, mult = v_mult, rewarded = true where id = b.id;
+  perform mw_coin_add(b.student_id, (mw_coin_cfg(b.academy_id) ->> (case when v_first and v_gate then 'gate_first' when v_first then 'battle_first' when v_base > 0 then 'battle_rewin' else 'none' end))::int,
+                      case when v_gate then '수문장 승리' else '배틀 승리' end, 'bt:' || b.id);
   return jsonb_build_object('xp', v_give, 'raw', v_raw, 'shards', v_sh, 'first', v_first, 'mult', v_mult, 'streak', v_streak,
     'limited', (not v_first and v_today), 'shards_total', v_before + v_sh, 'per', v_per,
     'stone', ((v_before + v_sh) / v_per) > (v_before / v_per));
@@ -1691,6 +1826,116 @@ begin
    where p.academy_id = mw_my_academy() and p.role = 'student' and p.active;
 end $$;
 
+-- ---------- v2.17 코인·상점·내 집 ----------
+-- 활동 승인 후 처리: 승인 코인 + 연속 보상 코인(streak_rewards 달성 횟수만큼, 한 번씩)
+create or replace function mw_coin_on_approve(p_student uuid, p_activity text, p_ref text) returns void
+language plpgsql security definer set search_path = public as $$
+declare v_ac uuid; v_cfg jsonb; v_info jsonb; k int;
+begin
+  select academy_id into v_ac from mw_profiles where id = p_student;
+  v_cfg := mw_coin_cfg(v_ac);
+  perform mw_coin_add(p_student, (v_cfg ->> 'activity')::int, '활동 승인', p_ref);
+  v_info := mw_streak_info(p_student) -> p_activity;
+  if v_info is not null then
+    for k in 1 .. coalesce((v_info ->> 'earned')::int, 0) loop
+      perform mw_coin_add(p_student, (v_cfg ->> 'streak')::int, '연속 ' || (v_info ->> 'days') || '일 달성', 'st:' || p_activity || ':' || k);
+    end loop;
+  end if;
+end $$;
+
+-- 학생: 상점(목록·내 코인·가진 것)
+create or replace function mw_shop() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_lv int;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  select coalesce(max(level), 1) into v_lv from mw_monsters where student_id = auth.uid() and hatched;
+  return jsonb_build_object('coins', mw_coin_balance(auth.uid()), 'level', v_lv,
+    'items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'kind', i.kind, 'name', i.name, 'price', i.price, 'min_level', i.min_level,
+              'owned', coalesce((select v.qty from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id), case when i.price = 0 then 1 else 0 end))
+              order by i.kind, i.sort) from mw_shop_items i where i.enabled), '[]'::jsonb));
+end $$;
+
+-- 학생: 사기(가격·잔액·레벨 조건은 서버가 확인)
+create or replace function mw_buy(p_item text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare it mw_shop_items; v_lv int; v_bal int; v_has int;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  perform 1 from mw_profiles where id = auth.uid() for update;
+  select * into it from mw_shop_items where id = p_item and enabled;
+  if not found then raise exception '살 수 없는 물건입니다.'; end if;
+  select coalesce(max(level), 1) into v_lv from mw_monsters where student_id = auth.uid() and hatched;
+  if v_lv < it.min_level then raise exception 'Lv.%부터 살 수 있어요.', it.min_level; end if;
+  select qty into v_has from mw_inventory where student_id = auth.uid() and item_id = it.id;
+  if (it.kind <> 'furniture' and (coalesce(v_has, 0) > 0 or it.price = 0)) or coalesce(v_has, 0) >= 9 then raise exception '이미 가지고 있어요.'; end if;
+  v_bal := mw_coin_balance(auth.uid());
+  if v_bal < it.price then raise exception '코인이 부족해요. (% / %)', v_bal, it.price; end if;
+  if it.price > 0 then insert into mw_coins(student_id, amount, reason, ref) values (auth.uid(), -it.price, it.name || ' 구매', 'buy:' || gen_random_uuid()); end if;
+  insert into mw_inventory(student_id, item_id, qty) values (auth.uid(), it.id, 1)
+  on conflict (student_id, item_id) do update set qty = mw_inventory.qty + 1;
+  perform mw_log('buy', auth.uid(), jsonb_build_object('item', it.id, 'price', it.price));
+  return jsonb_build_object('coins', mw_coin_balance(auth.uid()));
+end $$;
+
+-- 학생: 내 집
+create or replace function mw_home() returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare h mw_homes;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  select * into h from mw_homes where student_id = auth.uid();
+  return jsonb_build_object('wall', coalesce(h.wall, 'wall_cream'), 'floor', coalesce(h.floor, 'floor_wood'), 'layout', coalesce(h.layout, '[]'::jsonb),
+    'inventory', coalesce((select jsonb_object_agg(item_id, qty) from mw_inventory where student_id = auth.uid()), '{}'::jsonb),
+    'coins', mw_coin_balance(auth.uid()));
+end $$;
+
+-- 학생: 집 저장(가진 물건만, 가진 개수만큼, 방 안에만)
+create or replace function mw_home_save(p_wall text, p_floor text, p_layout jsonb) returns void
+language plpgsql security definer set search_path = public as $$
+declare e jsonb; v_cnt jsonb := '{}'::jsonb; v_i text;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  if not exists (select 1 from mw_shop_items i where i.id = p_wall and i.kind = 'wall' and (i.price = 0 or exists (select 1 from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id)))
+     or not exists (select 1 from mw_shop_items i where i.id = p_floor and i.kind = 'floor' and (i.price = 0 or exists (select 1 from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id))) then
+    raise exception '가지고 있는 벽지·바닥만 쓸 수 있어요.'; end if;
+  if jsonb_typeof(p_layout) <> 'array' or jsonb_array_length(p_layout) > 48 then raise exception '배치가 올바르지 않습니다.'; end if;
+  for e in select * from jsonb_array_elements(p_layout) loop
+    v_i := e ->> 'i';
+    if jsonb_typeof(e) <> 'object' or coalesce(e ->> 'x', '') !~ '^[0-7]$' or coalesce(e ->> 'y', '') !~ '^[0-5]$'
+       or not exists (select 1 from mw_shop_items where id = v_i and kind = 'furniture') then raise exception '배치가 올바르지 않습니다.'; end if;
+    v_cnt := jsonb_set(v_cnt, array[v_i], to_jsonb(coalesce((v_cnt ->> v_i)::int, 0) + 1));
+    if (v_cnt ->> v_i)::int > coalesce((select qty from mw_inventory where student_id = auth.uid() and item_id = v_i), 0) then
+      raise exception '가진 개수보다 많이 놓을 수 없어요.'; end if;
+  end loop;
+  if (select count(*) from (select distinct e2 ->> 'x', e2 ->> 'y' from jsonb_array_elements(p_layout) e2) q) <> jsonb_array_length(p_layout) then
+    raise exception '한 칸에는 하나만 놓을 수 있어요.'; end if;
+  insert into mw_homes(student_id, wall, floor, layout, updated_at) values (auth.uid(), p_wall, p_floor, p_layout, now())
+  on conflict (student_id) do update set wall = excluded.wall, floor = excluded.floor, layout = excluded.layout, updated_at = now();
+end $$;
+
+-- 학생: 몬스터에 액세서리 씌우기/벗기기
+create or replace function mw_equip(p_monster uuid, p_item text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  if p_item is not null and not exists (select 1 from mw_inventory v join mw_shop_items i on i.id = v.item_id
+                                         where v.student_id = auth.uid() and v.item_id = p_item and i.kind = 'acc') then
+    raise exception '가지고 있는 액세서리만 씌울 수 있어요.'; end if;
+  update mw_monsters set acc = p_item where id = p_monster and student_id = auth.uid() and hatched;
+  if not found then raise exception '내 몬스터가 아닙니다.'; end if;
+end $$;
+
+-- 선생님: 학생 코인 잔액과 최근 내역
+create or replace function mw_coins_of(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not ((p_student = auth.uid() and mw_student_ok()) or mw_same(p_student)) then raise exception '볼 수 없는 학생입니다.'; end if;
+  return jsonb_build_object('coins', mw_coin_balance(p_student),
+    'log', coalesce((select jsonb_agg(jsonb_build_object('amount', c.amount, 'reason', c.reason, 'at', c.created_at) order by c.created_at desc)
+                      from (select * from mw_coins where student_id = p_student order by created_at desc limit 20) c), '[]'::jsonb));
+end $$;
+
 -- ---------- 8. 함수 실행 권한 ----------
 do $$
 declare f record;
@@ -1704,7 +1949,8 @@ begin
                          'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy',
                          'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info',
                          'mw_seoul_today','mw_wd_idx','mw_battle_cfg','mw_battle_shards','mw_battle_day_ok','mw_battle_streak',
-                         'mw_battle_mult','mw_word_backlog','mw_word_advance','mw_battle_recheck','mw_battle_state','mw_battle_reward') then
+                         'mw_battle_mult','mw_word_backlog','mw_word_advance','mw_battle_recheck','mw_battle_state','mw_battle_reward',
+                         'mw_coin_cfg','mw_coin_balance','mw_coin_add','mw_coin_revoke','mw_coin_on_approve') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
