@@ -1,5 +1,6 @@
 -- =====================================================================
--- MONSTER WORLD · 데이터베이스 v2.1  (Supabase / PostgreSQL) — 여러 학원용
+-- MONSTER WORLD · 데이터베이스 v2.2  (Supabase / PostgreSQL) — 여러 학원용
+-- v2.2: 칭찬모아 기준(출석·태도·AR·NELT 등, 차감 포함), 선생님이 활동 목록을 직접 편집, 1000 XP = 1레벨
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
 -- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
@@ -75,7 +76,7 @@ create table if not exists mw_missions (
   student_id uuid not null references mw_profiles(id) on delete cascade,
   activity text not null,
   title text not null default '',
-  xp int not null check (xp between 0 and 500),
+  xp int not null check (xp between -5000 and 5000),
   due_date date not null default current_date,
   status text not null default 'assigned'
     check (status in ('assigned','requested','approved','rejected','revoked','cancelled')),
@@ -90,6 +91,9 @@ create table if not exists mw_missions (
   unique (student_id, batch_id)   -- 같은 배정/지급 버튼을 두 번 눌러도 한 번만 생성
 );
 create index if not exists mw_missions_student on mw_missions(student_id, status);
+-- v2.2: 차감(음수)과 큰 보상(AR·NELT)을 위해 XP 범위를 -5000~5000으로 넓힘
+alter table mw_missions drop constraint if exists mw_missions_xp_check;
+alter table mw_missions add constraint mw_missions_xp_check check (xp between -5000 and 5000);
 
 create table if not exists mw_books (
   id uuid primary key default gen_random_uuid(),
@@ -193,16 +197,30 @@ begin
 end $$;
 
 -- ---------- 2. 기본 데이터 ----------
+-- v2.2 기준 변경(한 번만 실행): 예전 기본값 그대로인 공통 설정만 바꾸고, 학원이 직접 바꾼 값은 건드리지 않습니다.
+do $$
+begin
+  if exists (select 1 from mw_settings where academy_id is null)
+     and not exists (select 1 from mw_settings where academy_id is null and key = 'activity_list') then
+    update mw_settings set value = '1000'::jsonb where academy_id is null and key = 'xp_per_level' and value = '300'::jsonb;
+    update mw_settings set value = '800'::jsonb where academy_id is null and key = 'weekly_xp_goal' and value = '300'::jsonb;
+    update mw_settings set value = value || '{"vocab":50}'::jsonb where academy_id is null and key = 'activity_xp' and value->'vocab' = '30'::jsonb;
+    update mw_settings set value = '["vocab","textbook","bookwriting","bookquiz","homework"]'::jsonb
+     where academy_id is null and key = 'self_report_acts' and value = '["vocab","bookwriting","bookquiz","homework"]'::jsonb;
+  end if;
+end $$;
+
 do $$
 declare d record;
 begin
   for d in select * from jsonb_each('{
-    "xp_per_level": 300, "max_level": 50, "evolve_levels": [15,35], "weekly_xp_goal": 300, "point_rate": 0,
+    "xp_per_level": 1000, "max_level": 50, "evolve_levels": [15,35], "weekly_xp_goal": 800, "point_rate": 0,
     "point_name": "포인트",
     "stages": ["Reader","Builder","Writer","Speaker","Author"],
-    "activity_xp": {"reading":20,"vocab":30,"syntax":30,"grammar":30,"writing":50,"bookwriting":30,"bookquiz":30,"homework":20,"challenge":100},
-    "activity_labels": {"reading":"원서 읽기 완료","vocab":"단어 테스트 통과","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","challenge":"특별 영어 챌린지"},
-    "self_report_acts": ["vocab","bookwriting","bookquiz","homework"],
+    "activity_xp": {"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
+    "activity_labels": {"reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"},
+    "activity_list": ["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
+    "self_report_acts": ["vocab","textbook","bookwriting","bookquiz","homework"],
     "reading_milestones": [{"books":10,"reward":"egg"},{"books":30,"reward":"rare_egg"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
   }'::jsonb) loop
     if not exists (select 1 from mw_settings where academy_id is null and key = d.key) then
@@ -216,6 +234,11 @@ update mw_settings set value = '{"bookwriting":30,"bookquiz":30}'::jsonb || valu
  where key = 'activity_xp' and not (value ? 'bookwriting' and value ? 'bookquiz');
 update mw_settings set value = '{"bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과"}'::jsonb || value
  where key = 'activity_labels' and academy_id is null and not (value ? 'bookwriting' and value ? 'bookquiz');
+-- v2.2 보충: 칭찬모아 활동의 기본 XP·이름 추가 (이미 있는 값은 유지)
+update mw_settings set value = '{"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100}'::jsonb || value
+ where key = 'activity_xp' and not (value ? 'nelt');
+update mw_settings set value = '{"reading":"원서 읽기 완료","attend":"출석","late":"지각","good":"태도 Good","bad":"태도 Bad","vocab":"단어 테스트 통과","textbook":"교재 1권 완료","bookwriting":"북라이팅 완료","bookquiz":"북퀴즈 통과","homework":"숙제 성실 완료","praise":"Special Praise","ar":"AR 북레벨 +1","nelt":"NELT 레벨 +1","syntax":"Syntax Builder 완료","grammar":"Grammar 완료","writing":"Writing Builder 완료","challenge":"특별 영어 챌린지"}'::jsonb || value
+ where key = 'activity_labels' and academy_id is null and not (value ? 'nelt');
 
 insert into mw_species(id, name, animal, concept, rarity, season, sort, art, forms) values
  ('flamy','FLAMY','불꽃 여우','용기와 도전','starter',null,1,
@@ -506,7 +529,8 @@ declare v_ac uuid := mw_my_academy(); v_day date := (now() at time zone 'Asia/Se
         v_xp int; v_id uuid; v_st text;
 begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
-  if not (coalesce(mw_setting(v_ac, 'self_report_acts'), '[]'::jsonb) ? coalesce(p_activity, '')) then
+  if not (coalesce(mw_setting(v_ac, 'self_report_acts'), '[]'::jsonb) ? coalesce(p_activity, ''))
+     or not (coalesce(mw_setting(v_ac, 'activity_list'), '[]'::jsonb) ? coalesce(p_activity, '')) then
     raise exception '스스로 요청할 수 없는 활동입니다.'; end if;
   perform pg_advisory_xact_lock(hashtext('mw_self_report:' || auth.uid()::text || ':' || p_activity));
   select id, status into v_id, v_st from mw_missions
@@ -521,8 +545,9 @@ begin
     raise exception '오늘 이미 요청한 활동입니다.';
   end if;
   v_xp := (mw_setting(v_ac, 'activity_xp')->>p_activity)::int;
-  if v_xp is null or v_xp < 0 or v_xp > 500 then
+  if v_xp is null or v_xp > 5000 then
     raise exception '이 활동의 XP 기준이 설정되지 않았습니다. 선생님께 알려 주세요.'; end if;
+  if v_xp < 0 then raise exception '차감 항목은 선생님만 입력할 수 있습니다.'; end if;
   insert into mw_missions(student_id, activity, title, xp, due_date, status, requested_at, created_by)
   values (auth.uid(), p_activity, '', v_xp, v_day, 'requested', now(), auth.uid())
   returning id into v_id;
@@ -598,7 +623,7 @@ declare s uuid; v_xp int; v_id uuid; v_mon uuid; v_done int := 0; v_skip int := 
 begin
   perform mw_need_teacher();
   v_xp := coalesce(p_xp, (mw_setting(mw_my_academy(), 'activity_xp')->>p_activity)::int, 0);
-  if v_xp < 0 or v_xp > 500 then raise exception 'XP는 0~500 사이여야 합니다.'; end if;
+  if v_xp < -5000 or v_xp > 5000 then raise exception 'XP는 -5000~5000 사이여야 합니다.'; end if;
   foreach s in array p_students loop
     v_id := null;
     insert into mw_missions(student_id, activity, title, xp, due_date, batch_id, created_by)
@@ -752,8 +777,19 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list') then
     raise exception '알 수 없는 설정입니다.'; end if;
+  if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key !~ '^[a-z0-9_]{1,24}$'
+           or case when jsonb_typeof(e.value) = 'number'
+                   then (e.value)::numeric not between -5000 and 5000 or (e.value)::numeric <> round((e.value)::numeric)
+                   else true end)) then
+    raise exception '활동 XP는 -5000~5000 사이 정수여야 합니다.'; end if;
+  if p_key in ('activity_list','self_report_acts') and (jsonb_typeof(p_value) <> 'array' or jsonb_array_length(p_value) > 40 or exists (
+       select 1 from jsonb_array_elements(p_value) e
+        where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[a-z0-9_]{1,24}$')) then
+    raise exception '활동 목록 형식이 올바르지 않습니다.'; end if;
   v_old := mw_setting(v_ac, p_key);
   update mw_settings set value = p_value, updated_by = auth.uid(), updated_at = now() where academy_id = v_ac and key = p_key;
   if not found then

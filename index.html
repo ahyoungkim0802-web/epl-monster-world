@@ -93,8 +93,9 @@ body.busy [data-act]{pointer-events:none;opacity:.7}
 /* missions */
 .mi{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
 .mi:first-of-type{border-top:0}
-.chip{flex:none;width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:15px;color:var(--navy)}
-.a-vocab{background:#E7DFFB}.a-syntax{background:#D6EFE3}.a-grammar{background:#FDE3DA}.a-writing{background:#FBEBC8}.a-homework{background:#E3E8F5}.a-bookwriting{background:#F7E1EC}.a-bookquiz{background:#E2F0D9}.a-challenge{background:var(--navy);color:#fff}.a-reading{background:#DDEFF6}
+.chip{background:#EEF0F4;flex:none;width:40px;height:40px;border-radius:13px;display:grid;place-items:center;font-family:var(--display);font-weight:700;font-size:15px;color:var(--navy)}
+.a-vocab{background:#E7DFFB}.a-syntax{background:#D6EFE3}.a-grammar{background:#FDE3DA}.a-writing{background:#FBEBC8}.a-homework{background:#E3E8F5}.a-bookwriting{background:#F7E1EC}.a-bookquiz{background:#E2F0D9}.a-attend{background:#DDF2E4}.a-late{background:#FBE0DC}.a-good{background:#E1F0FA}.a-bad{background:#F9D6D6}.a-textbook{background:#FFF0C9}.a-praise{background:#FCE7F3}.a-ar{background:#D8ECF3}.a-nelt{background:#E4E0F7}
+#actRows .inp{min-height:36px;padding:6px 10px}#actRows td{vertical-align:middle}.a-challenge{background:var(--navy);color:#fff}.a-reading{background:#DDEFF6}
 .mi .t{flex:1;min-width:0}
 .mi .t b{display:block;font-weight:600;overflow-wrap:anywhere}
 .mi .t span{font-size:12.5px;color:var(--muted)}
@@ -236,11 +237,15 @@ const ymd=d=>{d=new Date(d);return d.getFullYear()+'-'+String(d.getMonth()+1).pa
 const today=()=>ymd(new Date());
 const weekStart=()=>{const d=new Date();d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));return d};
 const fmtD=s=>{const d=new Date(s);return (d.getMonth()+1)+'.'+d.getDate()};
-const ACT={vocab:['Vo','단어 테스트 통과'],syntax:['Sx','Syntax Builder 완료'],grammar:['Gr','Grammar 완료'],writing:['Wr','Writing Builder 완료'],bookwriting:['Bw','북라이팅 완료'],bookquiz:['Bq','북퀴즈 통과'],homework:['Hw','숙제 성실 완료'],challenge:['Ch','특별 영어 챌린지'],reading:['Rd','원서 읽기 완료']};
-const MISSION_ACTS=['vocab','bookwriting','bookquiz','syntax','grammar','writing','homework','challenge'];
+const ACT_BASE={attend:['At','출석'],late:['Lt','지각'],good:['Gd','태도 Good'],bad:['Bd','태도 Bad'],vocab:['Vo','단어 테스트 통과'],textbook:['Tb','교재 1권 완료'],bookwriting:['Bw','북라이팅 완료'],bookquiz:['Bq','북퀴즈 통과'],homework:['Hw','숙제 성실 완료'],praise:['Sp','Special Praise'],ar:['AR','AR 북레벨 +1'],nelt:['NE','NELT 레벨 +1'],syntax:['Sx','Syntax Builder 완료'],grammar:['Gr','Grammar 완료'],writing:['Wr','Writing Builder 완료'],challenge:['Ch','특별 영어 챌린지'],reading:['Rd','원서 읽기 완료']};
+let ACT=Object.fromEntries(Object.entries(ACT_BASE).map(([k,v])=>[k,[...v]]));
+const actList=set=>((set&&Array.isArray(set.activity_list))?set.activity_list:DEF_SET.activity_list).filter(k=>k!=='reading');
+function buildAct(set){const lb=(set&&set.activity_labels)||{},keys=new Set([...Object.keys(ACT_BASE),...actList(set)]);ACT={};
+  for(const k of keys){const l=lb[k]||ACT_DEF[k]||k;ACT[k]=[ACT_BASE[k]?ACT_BASE[k][0]:l.slice(0,2),l]}
+  const L=actList(set);if(!L.includes(UI.qa))UI.qa=L[0]||'vocab'}
 const BADGES={evo_explorer:'Explorer 진화',evo_master:'Master 진화',lv10:'Lv.10 달성',lv25:'Lv.25 달성',lvmax:'최고 레벨 달성',first_hatch:'첫 부화',reader50:'원서 50권',master_reader:'마스터 리더'};
 const stg=()=>(W&&W.set&&Array.isArray(W.set.stages)?W.set.stages:[]);const PN=()=>esc((W&&W.set&&W.set.point_name)||'포인트');
-const ACT_DEF=Object.fromEntries(Object.entries(ACT).map(([k,v])=>[k,v[1]]));
+const ACT_DEF=Object.fromEntries(Object.entries(ACT_BASE).map(([k,v])=>[k,v[1]]));
 const acCode=()=>{try{return (new URLSearchParams(location.search).get('a')||localStorage.getItem('mw_academy')||'').toLowerCase()}catch(e){return ''}};
 const STN=['','Baby','Explorer','Master'];
 const RAR={starter:['스타터',''],common:['일반','gray'],rare:['희귀','rare'],seasonal:['시즌 한정','wait']};
@@ -346,9 +351,10 @@ const SPECIES_SEED=[
  ['frostie','FROSTIE','눈꽃 여우새','겨울 시즌 한정','seasonal','winter',{body:'#EAF2FA',belly:'#FFFFFF',accent:'#9CC3E8',dark:'#6C93BD',ears:'cat',tail:'fox',mark:'snow'}]
 ].map((r,i)=>({id:r[0],name:r[1],animal:r[2],concept:r[3],rarity:r[4],season:r[5],enabled:true,sort:i,art:r[6],
   forms:[1,2,3].map(s=>({stage:s,stage_name:STN[s],form_name:STN[s]+' '+r[1][0]+r[1].slice(1).toLowerCase()}))}));
-const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speaker','Author'],activity_labels:{},point_rate:0,xp_per_level:300,max_level:50,evolve_levels:[15,35],weekly_xp_goal:300,
-  activity_xp:{reading:20,vocab:30,syntax:30,grammar:30,writing:50,bookwriting:30,bookquiz:30,homework:20,challenge:100},
-  self_report_acts:['vocab','bookwriting','bookquiz','homework'],
+const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speaker','Author'],activity_labels:{},point_rate:0,xp_per_level:1000,max_level:50,evolve_levels:[15,35],weekly_xp_goal:800,
+  activity_xp:{"reading":20,"attend":50,"late":-10,"good":50,"bad":-100,"vocab":50,"textbook":200,"bookwriting":30,"bookquiz":30,"homework":20,"praise":100,"ar":1000,"nelt":3000,"syntax":30,"grammar":30,"writing":50,"challenge":100},
+  activity_list:["attend","late","good","bad","vocab","textbook","bookwriting","bookquiz","homework","praise","ar","nelt","syntax","grammar","writing","challenge"],
+  self_report_acts:["vocab","textbook","bookwriting","bookquiz","homework"],
   reading_milestones:[{books:10,reward:'egg'},{books:30,reward:'rare_egg'},{books:50,reward:'badge',id:'reader50'},{books:100,reward:'badge',id:'master_reader'}]};
 const Demo={
   KEY:'mw_demo_v1',st:null,uid:null,
@@ -410,16 +416,16 @@ const Demo={
     ack(a){const m=this.st.monsters.find(x=>x.id===a.monster&&x.student_id===this.uid);if(m){m.seen_level=m.level;m.seen_stage=m.stage}},
     request_mission(a){const m=this.st.missions.find(x=>x.id===a.id&&x.student_id===this.uid&&['assigned','rejected'].includes(x.status));if(!m)throw new Error('요청할 수 없는 미션입니다.');m.status='requested';m.requested_at=new Date().toISOString()},
     self_report(a){const p=this.me();if(!p||p.role!=='student'||!p.active)throw new Error('승인된 학생 계정이 아닙니다.');
-      if(!(this.st.set.self_report_acts||[]).includes(a.activity))throw new Error('스스로 요청할 수 없는 활동입니다.');
+      if(!(this.st.set.self_report_acts||[]).includes(a.activity)||!actList(this.st.set).includes(a.activity))throw new Error('스스로 요청할 수 없는 활동입니다.');
       const d=today(),ms=this.st.missions.filter(x=>x.student_id===p.id&&x.activity===a.activity&&x.due_date===d&&['assigned','requested','approved','rejected'].includes(x.status));
       const re=ms.find(x=>x.status==='assigned')||ms.find(x=>x.status==='rejected');
       if(re){re.status='requested';re.requested_at=new Date().toISOString();return re.id}
       if(ms.length)throw new Error('오늘 이미 요청한 활동입니다.');
-      const xp=this.st.set.activity_xp[a.activity];if(!(Number.isInteger(xp)&&xp>=0&&xp<=500))throw new Error('이 활동의 XP 기준이 설정되지 않았습니다. 선생님께 알려 주세요.');
+      const xp=this.st.set.activity_xp[a.activity];if(!(Number.isInteger(xp)&&xp<=5000))throw new Error('이 활동의 XP 기준이 설정되지 않았습니다. 선생님께 알려 주세요.');if(xp<0)throw new Error('차감 항목은 선생님만 입력할 수 있습니다.');
       const m={id:uuid(),student_id:p.id,activity:a.activity,title:'',xp,due_date:d,status:'requested',batch_id:null,created_by:p.id,created_at:new Date().toISOString(),requested_at:new Date().toISOString()};this.st.missions.push(m);return m.id},
     request_book(a){const t=(a.title||'').trim().slice(0,120),k=this.key(t);if(k.length<2)throw new Error('책 제목을 입력해 주세요.');if(this.st.books.some(b=>b.student_id===this.uid&&b.title_key===k))throw new Error('이미 등록한 책입니다.');
       this.st.books.push({id:uuid(),student_id:this.uid,title:t,title_key:k,status:'requested',created_at:new Date().toISOString()})},
-    assign_missions(a){this.T();const xp=a.xp??this.st.set.activity_xp[a.activity]??0;if(xp<0||xp>500)throw new Error('XP는 0~500 사이여야 합니다.');let done=0,skipped=0;
+    assign_missions(a){this.T();const xp=a.xp??this.st.set.activity_xp[a.activity]??0;if(xp<-5000||xp>5000)throw new Error('XP는 -5000~5000 사이여야 합니다.');let done=0,skipped=0;
       for(const s of a.students){const p=this.st.profiles.find(x=>x.id===s&&x.role==='student'&&x.active);if(!p||this.st.missions.some(m=>m.student_id===s&&m.batch_id===a.batch)){skipped++;continue}
         const m={id:uuid(),student_id:s,activity:a.activity,title:(a.title||'').slice(0,80),xp,due_date:a.due||today(),status:'assigned',batch_id:a.batch,created_by:this.uid,created_at:new Date().toISOString()};this.st.missions.push(m);
         if(a.approve){if(!p.active_monster){skipped++;continue}m.status='approved';m.decided_by=this.uid;m.decided_at=new Date().toISOString();m.monster_id=p.active_monster;this.xp(s,p.active_monster,xp,'grant',a.activity,m.id)}done++}
@@ -437,7 +443,10 @@ const Demo={
     adjust_xp(a){this.T();if(!a.amount||Math.abs(a.amount)>1000)throw new Error('정정 XP는 ±1~1000 사이여야 합니다.');if(!(a.reason||'').trim())throw new Error('정정 사유를 입력해 주세요.');const p=this.st.profiles.find(x=>x.id===a.student);if(!p||!p.active_monster)throw new Error('대표 몬스터가 없습니다.');this.xp(a.student,p.active_monster,a.amount,'adjust',a.reason)},
     gift_egg(a){this.T();if(this.st.monsters.some(m=>m.student_id===a.student&&m.species_id===a.species))throw new Error('이미 가지고 있는 몬스터입니다.');this.st.monsters.push({id:uuid(),student_id:a.student,species_id:a.species,nickname:'',xp:0,level:1,stage:1,seen_level:1,seen_stage:1,hatched:false,source:'선생님 선물',obtained_at:new Date().toISOString()})},
     set_stage(a){this.T();const p=this.st.profiles.find(x=>x.id===a.student);if(p)p.epl_stage=a.stage},
-    set_setting(a){this.T();this.st.set[a.key]=a.value},
+    set_setting(a){this.T();const K=/^[a-z0-9_]{1,24}$/,v=a.value;
+      if(a.key==='activity_xp'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!Number.isInteger(x)||x<-5000||x>5000)))throw new Error('활동 XP는 -5000~5000 사이 정수여야 합니다.');
+      if(['activity_list','self_report_acts'].includes(a.key)&&(!Array.isArray(v)||v.length>40||v.some(k=>typeof k!=='string'||!K.test(k))))throw new Error('활동 목록 형식이 올바르지 않습니다.');
+      this.st.set[a.key]=v},
     activate_student(a){this.T();const p=this.st.profiles.find(x=>x.id===a.id&&x.role==='student');if(!p)throw new Error('학생을 찾을 수 없습니다.');p.active=a.active;if(a.name)p.display_name=a.name;p.teacher_id=p.teacher_id||this.uid},
     reset_password(){this.T()},
     settle(a){this.T();const L=this.st.settle=(this.st.settle||[]).filter(x=>!(a.students.includes(x.student_id)&&x.week_start===a.start));if(a.done)for(const id of a.students)L.push({student_id:id,week_start:a.start,done_at:new Date().toISOString()})}
@@ -635,10 +644,10 @@ function viewTeacher(){
        <div class="row end" style="margin-top:12px"><button class="btn d" data-act="decideB" data-ok="0">선택 반려</button><button class="btn p" data-act="decideB" data-ok="1">선택 승인 · +${W.set.activity_xp.reading} XP</button></div>`:'<div class="empty">대기 중인 독서 요청이 없습니다.</div>'}</section>
     </div><div class="stack">
      <section class="card stack"><h3>빠른 지급 <small>학생 요청 없이 바로 승인</small></h3>
-      <div><p class="tiny muted" style="margin-bottom:6px">① 활동</p><div class="chips">${MISSION_ACTS.map(a=>`<button class="ck ${UI.qa===a?'on':''}" data-act="qAct" data-a="${a}">${ACT[a][1].replace(' 완료','').replace(' 통과','')} <span class="num">${W.set.activity_xp[a]}</span></button>`).join('')}</div></div>
+      <div><p class="tiny muted" style="margin-bottom:6px">① 활동</p><div class="chips">${actList(W.set).map(a=>`<button class="ck ${UI.qa===a?'on':''}" data-act="qAct" data-a="${a}">${ACT[a][1].replace(' 완료','').replace(' 통과','')} <span class="num">${W.set.activity_xp[a]}</span></button>`).join('')}</div></div>
       <div><p class="tiny muted" style="margin-bottom:6px">② 학생 <button class="btn sm g" data-act="qAll">전체 선택/해제</button></p><div class="chips">${stu.map(p=>`<button class="ck ${UI.qs.has(p.id)?'on':''}" data-act="qStu" data-id="${p.id}">${esc(p.display_name)}</button>`).join('')||'<span class="muted tiny">등록된 학생이 없습니다.</span>'}</div></div>
-      <button class="btn p" data-act="quickGrant" ${UI.qs.size?'':'disabled'}>${UI.qs.size}명에게 ${W.set.activity_xp[UI.qa]} XP 지급</button></section>
-     <section class="card"><h3>오늘 승인 요약 <small>${PN()} 입력 참고용</small></h3>${Object.keys(by).length?`<div id="sumTxt">${Object.entries(by).map(([id,v])=>`<div class="mi"><div class="t"><b>${esc(stuName(id))}</b></div><span>${v.n}건</span><span class="xpv">+${v.x}</span></div>`).join('')}</div><button class="btn sm" data-act="copySum" style="margin-top:10px">요약 복사</button>`:'<div class="empty">오늘 승인한 내역이 없습니다.</div>'}
+      <button class="btn p" data-act="quickGrant" ${UI.qs.size?'':'disabled'}>${UI.qs.size}명에게 ${(x=>x<0?x+' XP 차감':x+' XP 지급')(W.set.activity_xp[UI.qa]??0)}</button></section>
+     <section class="card"><h3>오늘 승인 요약 <small>${PN()} 입력 참고용</small></h3>${Object.keys(by).length?`<div id="sumTxt">${Object.entries(by).map(([id,v])=>`<div class="mi"><div class="t"><b>${esc(stuName(id))}</b></div><span>${v.n}건</span><span class="xpv">${v.x>0?'+':''}${v.x}</span></div>`).join('')}</div><button class="btn sm" data-act="copySum" style="margin-top:10px">요약 복사</button>`:'<div class="empty">오늘 승인한 내역이 없습니다.</div>'}
       <div class="note" style="margin-top:12px">실제 보상(${PN()})은 기존 방식대로 지급합니다. 이 화면은 몬스터 XP만 다룹니다.</div></section>
     </div></div>`;
   }else if(UI.ttab==='weekly'){
@@ -661,9 +670,9 @@ function viewTeacher(){
   }else if(UI.ttab==='missions'){
     const open=W.missions.filter(m=>['assigned','rejected'].includes(m.status));
     main=`<div class="grid g2"><form class="card stack" id="fAssign"><h3>미션 배정 <small>학생이 완료 요청 → 선생님 승인</small></h3>
-      <div><p class="tiny muted" style="margin-bottom:6px">① 활동</p><div class="chips">${MISSION_ACTS.map(a=>`<button type="button" class="ck ${UI.qa===a?'on':''}" data-act="qAct" data-a="${a}">${ACT[a][1].replace(' 완료','').replace(' 통과','')}</button>`).join('')}</div></div>
+      <div><p class="tiny muted" style="margin-bottom:6px">① 활동</p><div class="chips">${actList(W.set).map(a=>`<button type="button" class="ck ${UI.qa===a?'on':''}" data-act="qAct" data-a="${a}">${ACT[a][1].replace(' 완료','').replace(' 통과','')}</button>`).join('')}</div></div>
       <label class="field">② 미션 이름 (선택)<input id="aTitle" maxlength="80" placeholder="예: Auto Voca Day 12"></label>
-      <div class="row"><label class="field" style="flex:1">XP<input id="aXp" type="number" min="0" max="500" value="${W.set.activity_xp[UI.qa]}"></label><label class="field" style="flex:1">날짜<input id="aDue" type="date" value="${today()}"></label></div>
+      <div class="row"><label class="field" style="flex:1">XP<input id="aXp" type="number" min="-5000" max="5000" value="${W.set.activity_xp[UI.qa]}"></label><label class="field" style="flex:1">날짜<input id="aDue" type="date" value="${today()}"></label></div>
       <div><p class="tiny muted" style="margin-bottom:6px">③ 학생 <button type="button" class="btn sm g" data-act="qAll">전체 선택/해제</button></p><div class="chips">${stu.map(p=>`<button type="button" class="ck ${UI.qs.has(p.id)?'on':''}" data-act="qStu" data-id="${p.id}">${esc(p.display_name)}</button>`).join('')}</div></div>
       <button class="btn p" ${UI.qs.size?'':'disabled'}>${UI.qs.size}명에게 배정</button></form>
      <section class="card"><h3>진행 중인 미션 <small>${open.length}건</small></h3>${open.length?`<div class="tw"><table><thead><tr><th>학생</th><th>미션</th><th class="r">XP</th><th></th></tr></thead><tbody>${open.map(m=>`<tr><td><b>${esc(stuName(m.student_id))}</b></td><td>${esc(m.title||ACT[m.activity]?.[1])} ${m.status==='rejected'?'<span class="pill no">반려됨</span>':''}</td><td class="r num">${m.xp}</td><td class="r"><button class="btn sm p" data-act="approveOne" data-id="${m.id}">승인</button> <button class="btn sm d" data-act="cancelM" data-id="${m.id}">삭제</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">진행 중인 미션이 없습니다.</div>'}</section></div>`;
@@ -679,12 +688,14 @@ function viewTeacher(){
       <div class="row"><label class="field" style="flex:1">레벨당 필요 XP<input id="sPer" type="number" min="50" max="5000" value="${s.xp_per_level}"></label><label class="field" style="flex:1">최고 레벨<input id="sMax" type="number" min="10" max="100" value="${s.max_level}"></label></div>
       <div class="row"><label class="field" style="flex:1">Explorer 진화 레벨<input id="sE1" type="number" min="2" value="${s.evolve_levels[0]}"></label><label class="field" style="flex:1">Master 진화 레벨<input id="sE2" type="number" min="3" value="${s.evolve_levels[1]}"></label></div>
       <label class="field">주간 XP 목표<input id="sWk" type="number" min="0" value="${s.weekly_xp_goal}"></label>
-      <h3 style="margin:6px 0 0">활동별 XP</h3><div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">${Object.keys(ACT).map(a=>`<label class="field">${ACT[a][1]}<input id="sx_${a}" type="number" min="0" max="500" value="${s.activity_xp[a]??0}"></label>`).join('')}</div>
+      <h3 style="margin:6px 0 0">활동 목록 <small>이름·XP·학생 요청 여부 수정 · 음수는 차감</small></h3>
+      <div class="tw"><table><thead><tr><th>활동 이름</th><th class="r">XP</th><th>학생 요청</th><th></th></tr></thead><tbody id="actRows">${[...actList(s),'reading'].map(k=>actRow(k,ACT[k]?ACT[k][1]:k,s.activity_xp[k]??0,(s.self_report_acts||[]).includes(k))).join('')}</tbody></table></div>
+      <div><button type="button" class="btn sm" data-act="actAdd">+ 활동 추가</button></div>
+      <p class="tiny muted">'학생 요청'에 체크한 활동은 학생 화면의 '다 했어요'에 나오고, 나머지는 선생님이 빠른 지급으로 줍니다. 차감 항목은 학생 요청으로 둘 수 없습니다. 원서 읽기는 독서 탭에서 요청합니다.</p>
       <h3 style="margin:6px 0 0">독서 보상 기준 (권수)</h3><div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">${s.reading_milestones.map((m,i)=>`<label class="field">${m.id==='master_reader'?'마스터 리더 칭호':{egg:'새 몬스터 알',rare_egg:'희귀 몬스터 알',badge:'특별 배지'}[m.reward]}<input id="sm_${i}" type="number" min="1" value="${m.books}"></label>`).join('')}</div>
       <h3 style="margin:6px 0 0">우리 학원 용어</h3>
       <label class="field">영어 역량 단계 이름 (쉼표로 구분 · 비우면 단계 표시 안 함)<input id="sStg" maxlength="120" value="${esc(stg().join(', '))}"></label>
       <label class="field">보상 포인트 이름<input id="sPn" maxlength="12" value="${esc(s.point_name||'포인트')}" placeholder="예: 칭찬모아, 달란트"></label>
-      <div class="grid" style="grid-template-columns:repeat(2,1fr);gap:8px">${Object.keys(ACT).map(a=>`<label class="field">${ACT[a][0]} 활동 이름<input id="sl_${a}" maxlength="24" value="${esc(ACT[a][1])}"></label>`).join('')}</div>
       <button class="btn p">기준 저장</button><p class="tiny muted">변경 내용은 이후 승인부터 적용되며, 변경 이력이 기록됩니다.</p></form>
      <div class="stack"><section class="card"><h3>우리 학원 정보</h3>
       <div class="mi"><div class="t"><span>학원 이름</span></div><b>${esc(W.academy?W.academy.name:'')}</b></div>
@@ -699,6 +710,12 @@ function viewTeacher(){
   }
   $('#app').innerHTML=`${demoBar()}<div class="wrap">${header()}<div class="ttabs">${tabs.map(([k,v,n])=>`<button class="${UI.ttab===k?'on':''}" data-act="ttab" data-t="${k}">${v}${n?`<em>${n}</em>`:''}</button>`).join('')}</div>${main}</div>`;
 }
+const actRow=(k,l,x,sf)=>`<tr data-k="${esc(k)}"><td><input class="inp al" maxlength="24" value="${esc(l)}" aria-label="활동 이름" placeholder="예: 발표 참여"></td><td class="r"><input class="inp ax num" type="number" min="-5000" max="5000" step="1" value="${x}" aria-label="XP" style="width:96px"></td><td>${k==='reading'?'<span class="tiny muted">독서 탭</span>':`<input type="checkbox" class="as" aria-label="학생 요청" ${sf?'checked':''}>`}</td><td class="r">${k==='reading'?'':'<button type="button" class="btn sm d" data-act="actDel">삭제</button>'}</td></tr>`;
+function readActs(){const ax={},lb={},list=[],self=[];for(const tr of document.querySelectorAll('#actRows tr[data-k]')){const k=tr.dataset.k,l=tr.querySelector('.al').value.trim(),x=Number(tr.querySelector('.ax').value);
+    if(!l)throw new Error('비어 있는 활동 이름이 있습니다. 이름을 넣거나 그 줄을 삭제해 주세요.');if(!Number.isInteger(x)||x<-5000||x>5000)throw new Error(`${l}: XP는 -5000~5000 사이 정수로 입력해 주세요.`);
+    if(Object.values(lb).includes(l))throw new Error(`같은 이름의 활동이 있습니다: ${l}`);ax[k]=x;lb[k]=l;if(k==='reading')continue;list.push(k);
+    const c=tr.querySelector('.as');if(c&&c.checked){if(x<0)throw new Error(`${l}: 차감 항목은 학생 요청으로 둘 수 없습니다.`);self.push(k)}}
+  if(!list.length)throw new Error('활동이 하나 이상 있어야 합니다.');return{ax,lb,list,self}}
 function ledgerTable(L,withName){if(!L.length)return '<div class="empty">내역이 없습니다.</div>';
   return `<div class="tw"><table><thead><tr><th>일시</th>${withName?'<th>학생</th>':''}<th>구분</th><th>내용</th><th class="r">XP</th><th></th></tr></thead><tbody>${L.map(l=>{const rev=l.kind==='grant'&&(l.mission_id||l.book_id)&&!W.ledgerRevoked?.has(l.mission_id||l.book_id);
     return `<tr><td class="num">${fmtD(l.created_at)}</td>${withName?`<td><b>${esc(stuName(l.student_id))}</b></td>`:''}<td><span class="pill ${l.kind==='grant'?'ok':l.kind==='revoke'?'no':'wait'}">${{grant:'지급',revoke:'취소',adjust:'정정'}[l.kind]}</span></td><td>${esc(ACT[l.reason]?.[1]||l.reason)}</td><td class="r num"><b>${l.amount>0?'+':''}${l.amount}</b></td><td class="r">${rev?`<button class="btn sm d" data-act="revoke" data-m="${l.mission_id||''}" data-b="${l.book_id||''}">지급 취소</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`}
@@ -719,7 +736,7 @@ async function openStudent(id){const p=W.profiles.find(x=>x.id===id);if(!p)retur
 /* ================= 라우팅 ================= */
 const wkStart=()=>{const d=weekStart();d.setDate(d.getDate()+7*UI.wk);return d};
 async function loadWeekly(){try{UI.weekly=await api.weekly(ymd(wkStart()))||[]}catch(e){UI.weekly=[];toast(e.message,true)}}
-async function refresh(){W=await api.load();if(W&&W.set)for(const k in ACT)ACT[k][1]=(W.set.activity_labels&&W.set.activity_labels[k])||ACT_DEF[k];if(W&&W.me&&W.me.role==='teacher'&&W.me.active&&UI.ttab==='weekly')await loadWeekly();render()}
+async function refresh(){W=await api.load();if(W&&W.set)buildAct(W.set);if(W&&W.me&&W.me.role==='teacher'&&W.me.active&&UI.ttab==='weekly')await loadWeekly();render()}
 function render(){
   if(!W)return viewLogin(UI.loginMode);
   if(!W.me){$('#app').innerHTML=`<div class="login"><div class="card stack"><h3>계정 정보를 찾을 수 없습니다</h3><p class="muted">선생님께 계정 등록을 요청해 주세요.</p><button class="btn" data-act="logout">로그아웃</button></div></div>`;return}
@@ -757,7 +774,10 @@ const A={
   // teacher
   async decideM(d){const ids=[...UI.selM];if(!ids.length)return toast('승인할 요청을 선택해 주세요.',true);const ok=d.ok==='1';const r=await call('decide_missions',{ids,approve:ok},r=>ok?`${r.done}건 승인 · XP 지급 완료`+(r.skipped?` (스타터 미선택 ${r.skipped}건 제외)`:''):`${r.done}건 반려`);if(r)UI.selM.clear(),render()},
   async decideB(d){const ids=[...UI.selB];if(!ids.length)return toast('승인할 독서 요청을 선택해 주세요.',true);const ok=d.ok==='1';const r=await call('decide_books',{ids,approve:ok,comp:null},r=>ok?`독서 ${r.done}권 승인`:`${r.done}건 반려`);if(r)UI.selB.clear(),render()},
-  qAct(d){UI.qa=d.a;render()},qStu(d){UI.qs.has(d.id)?UI.qs.delete(d.id):UI.qs.add(d.id);keep(render)},
+  qAct(d){UI.qa=d.a;render()},
+  actAdd(){const r=document.querySelector('#actRows tr[data-k="reading"]');if(!r)return;if(document.querySelectorAll('#actRows tr[data-k]').length>40)return toast('활동은 40개까지 만들 수 있습니다.',true);
+    r.insertAdjacentHTML('beforebegin',actRow('c'+Math.random().toString(36).slice(2,8),'',0,false));r.previousElementSibling.querySelector('.al').focus()},
+  actDel(d,el){el.closest('tr').remove()},qStu(d){UI.qs.has(d.id)?UI.qs.delete(d.id):UI.qs.add(d.id);keep(render)},
   qAll(){const s=students();if(UI.qs.size>=s.length)UI.qs.clear();else s.forEach(p=>UI.qs.add(p.id));keep(render)},
   async quickGrant(){const n=UI.qs.size,r=await call('assign_missions',{students:[...UI.qs],activity:UI.qa,title:ACT[UI.qa][1],xp:null,due:today(),batch:uuid(),approve:true},r=>`${r.done}명 지급 완료`+(r.skipped?` · ${r.skipped}명 제외(스타터 미선택)`:''));if(r){UI.qs.clear();render()}},
   approveOne(d){call('decide_missions',{ids:[d.id],approve:true},'승인했습니다.')},cancelM(d){call('cancel_mission',{id:d.id},'미션을 삭제했습니다.')},
@@ -786,10 +806,10 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
     else if(id==='fBook'){if(await call('request_book',{title:$('#bTitle').value},'선생님께 완독 확인을 요청했습니다.'))0}
     else if(id==='fAssign'){const xp=Number($('#aXp').value);const r=await call('assign_missions',{students:[...UI.qs],activity:UI.qa,title:$('#aTitle').value.trim()||ACT[UI.qa][1],xp:Number.isFinite(xp)?xp:null,due:$('#aDue').value||today(),batch:uuid(),approve:false},r=>`${r.done}명에게 배정했습니다.`);if(r){UI.qs.clear();render()}}
     else if(id==='fSet'){const n=x=>Math.round(Number($(x).value));const e1=n('#sE1'),e2=n('#sE2');if(!(e1<e2&&e2<=n('#sMax')))return toast('진화 레벨은 Explorer < Master ≤ 최고 레벨 순서여야 합니다.',true);
-      const ax={};for(const a of Object.keys(ACT))ax[a]=n('#sx_'+a);const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
-      document.body.classList.add('busy');const sg=$('#sStg').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8),lb={};for(const a of Object.keys(ACT)){const v=$('#sl_'+a).value.trim();if(v)lb[a]=v}
+      let A;try{A=readActs()}catch(err){return toast(err.message,true)}const{ax,lb,list,self}=A;const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
+      document.body.classList.add('busy');const sg=$('#sStg').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8);
       const cur=k=>k==='stages'?stg():k==='activity_labels'?(W.set.activity_labels||{}):W.set[k];
-      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
+      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
     else if(id==='fRate'){const v=Number($('#rate').value);if(!(v>=0&&v<=100))return toast('환산 기준은 0~100 사이로 입력해 주세요.',true);await call('set_setting',{key:'point_rate',value:v},'환산 기준을 적용했습니다.')}
     else if(id==='fRevoke'){const why=$('#rvWhy').value.trim(),d=f.dataset;closeModal();const ok=d.m?await call('revoke_mission',{id:d.m,reason:why},'지급을 취소했습니다.'):await call('revoke_book',{id:d.b,reason:why},'독서 실적을 취소했습니다.');if(ok){(W.ledgerRevoked=W.ledgerRevoked||new Set()).add(d.m||d.b);render()}}
     else if(id==='fAddBook'){const sid=f.dataset.id;if(await call('add_book',{student:sid,title:$('#abTitle').value,comp:null},'독서 실적을 등록했습니다.'))openStudent(sid)}
