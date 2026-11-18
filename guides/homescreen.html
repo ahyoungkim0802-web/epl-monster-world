@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>홈 화면 추가 안내</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<style>
+:root{--ink:#1F2747;--navy:#28314B;--sub:#5B6386;--line:#D9DDEE;--tint:#F4F5FB;--gold:#E8A93A;--mint:#3FB38C;--sky:#4C8DE0;--coral:#E66F5C;
+  --disp:'Jua','Noto Sans KR',system-ui,sans-serif;--body:'Gowun Dodum','Noto Sans KR',system-ui,sans-serif}
+*{box-sizing:border-box}
+body{margin:0;background:#EEF0F7;color:var(--ink);font-family:var(--body)}
+.sheet{background:#fff;width:210mm;height:297mm;margin:0 auto;padding:11mm 12mm 9mm;display:flex;flex-direction:column;gap:4.5mm;font-size:10.6pt;line-height:1.5}
+.sheet>*{flex-shrink:0}
+h1,h2,p{margin:0}
+b{font-family:'Noto Sans KR',sans-serif;font-weight:700}
+.top{background:var(--navy);color:#fff;border-radius:16px;padding:6mm 7mm;display:flex;gap:6mm;align-items:center;justify-content:space-between}
+.top h1{font-family:var(--disp);font-weight:400;font-size:24pt;line-height:1.15}
+.top p{color:#C9CFEA;margin-top:5px;font-size:10.5pt}
+.eyebrow{font-size:8pt;letter-spacing:.14em;color:var(--gold);font-family:'Noto Sans KR',sans-serif;font-weight:700}
+.qr{background:#fff;border-radius:12px;padding:6px;text-align:center;flex:none}
+.qr div{width:30mm;height:30mm}
+.qr div svg{width:100%;height:100%;display:block}
+.qr span{display:block;color:var(--navy);font-size:8pt;font-family:'Noto Sans KR',sans-serif;font-weight:700;margin-top:2px}
+.why{display:flex;gap:4mm;align-items:center;background:var(--tint);border-radius:14px;padding:3.5mm 5mm}
+.why img{width:16mm;height:16mm;border-radius:22%;flex:none;box-shadow:0 2px 6px #0003}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:4mm}
+.box{border:2px solid var(--line);border-radius:16px;padding:4mm 4.5mm;display:flex;flex-direction:column;gap:2.6mm}
+.box h2{font-family:var(--disp);font-weight:400;font-size:15pt;color:var(--navy);display:flex;align-items:center;gap:8px}
+.tag{font-family:'Noto Sans KR',sans-serif;font-size:8pt;font-weight:700;color:#fff;border-radius:999px;padding:2px 9px}
+.step{display:grid;grid-template-columns:26px 1fr;gap:8px;align-items:start}
+.n{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-family:var(--disp);font-size:13pt}
+.ic{display:inline-flex;align-items:center;justify-content:center;vertical-align:-5px;width:22px;height:22px;border:1.5px solid var(--sub);border-radius:6px;margin:0 2px;background:#fff}
+.ic svg{width:14px;height:14px}
+.small{font-size:9pt;color:var(--sub)}
+.warn{background:#FFF6E3;border-radius:14px;padding:3.5mm 5mm;color:#6B4A12;display:flex;flex-direction:column;gap:1.5mm}
+.foot{margin-top:auto;display:flex;justify-content:space-between;font-size:8pt;color:var(--sub);border-top:1px solid var(--line);padding-top:2.5mm}
+@media print{@page{size:A4;margin:0}body{background:#fff}.sheet{margin:0}}
+</style>
+</head>
+<body>
+<section class="sheet">
+  <header class="top">
+    <div>
+      <div class="eyebrow">HOME SCREEN</div>
+      <h1>MONSTER WORLD를<br>휴대폰 홈 화면에 추가하자!</h1>
+      <p>한 번만 해 두면 앱처럼 아이콘을 눌러 바로 들어갈 수 있어.</p>
+    </div>
+    <div class="qr"><div id="qr"></div><span>classpoint.co.kr</span></div>
+  </header>
+
+  <div class="why">
+    <img src="../apple-touch-icon.png" alt="MONSTER WORLD 아이콘">
+    <p>추가하면 홈 화면에 이 <b>몬스터 아이콘</b>이 생겨. 주소를 매번 칠 필요가 없어! 먼저 휴대폰 카메라로 오른쪽 위 <b>QR 코드</b>를 찍거나, 주소창에 <b>classpoint.co.kr</b>을 입력해서 열어 줘.</p>
+  </div>
+
+  <div class="cols">
+    <div class="box">
+      <h2>🍎 아이폰 <span class="tag" style="background:var(--sky)">Safari</span></h2>
+      <div class="step"><span class="n" style="background:var(--sky)">1</span><p><b>Safari</b>로 classpoint.co.kr을 열어.</p></div>
+      <div class="step"><span class="n" style="background:var(--sky)">2</span><p>화면 아래의 <b>공유 버튼</b>
+        <span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="#1F2747" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg></span>
+        을 눌러.<br><span class="small">공유 버튼이 안 보이면 먼저 <span class="ic"><svg viewBox="0 0 24 24" fill="#1F2747"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></span> 버튼을 눌러 봐.</span></p></div>
+      <div class="step"><span class="n" style="background:var(--sky)">3</span><p>메뉴를 아래로 내려서 <b>"홈 화면에 추가"</b>를 눌러.</p></div>
+      <div class="step"><span class="n" style="background:var(--sky)">4</span><p>오른쪽 위 <b>"추가"</b>를 누르면 끝!</p></div>
+    </div>
+
+    <div class="box">
+      <h2>🤖 갤럭시 · 안드로이드 <span class="tag" style="background:var(--mint)">Chrome</span></h2>
+      <div class="step"><span class="n" style="background:var(--mint)">1</span><p><b>Chrome</b>으로 classpoint.co.kr을 열어.</p></div>
+      <div class="step"><span class="n" style="background:var(--mint)">2</span><p>오른쪽 위 <b>점 세 개</b>
+        <span class="ic"><svg viewBox="0 0 24 24" fill="#1F2747"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></span>
+        를 눌러.</p></div>
+      <div class="step"><span class="n" style="background:var(--mint)">3</span><p><b>"홈 화면에 추가"</b> 또는 <b>"앱 설치"</b>를 눌러.</p></div>
+      <div class="step"><span class="n" style="background:var(--mint)">4</span><p><b>"추가"</b>(또는 "설치")를 누르면 끝!</p></div>
+      <p class="small"><b>삼성 인터넷</b>을 쓰면: 아래 <b>≡ 메뉴</b> → <b>"현재 페이지 추가"</b> → <b>"홈 화면"</b></p>
+    </div>
+  </div>
+
+  <div class="warn">
+    <p>⚠️ <b>카카오톡에서 링크를 눌러 열었다면</b> 홈 화면에 추가가 안 될 수 있어. 오른쪽 아래(또는 위) <b>⋯ 메뉴</b> → <b>"다른 브라우저로 열기"</b>를 누른 다음 위 순서대로 해 줘.</p>
+    <p>🔑 홈 화면 아이콘으로 처음 들어가면 <b>로그인을 한 번 더</b> 해야 할 수 있어. 학원 코드 · 아이디 · 비밀번호는 선생님께 받은 그대로 넣으면 돼.</p>
+  </div>
+
+  <div class="box" style="flex-direction:row;align-items:center;gap:4mm;padding:3.5mm 4.5mm">
+    <span style="font-size:22pt">🔥</span>
+    <p>매일 아이콘을 눌러서 <b>"다 했어요"</b>를 남기면 연속 기록이 쌓여. 클래스카드를 <b>평일 7일 연속</b> 하면 <b>💠 진화석</b>을 받아!</p>
+  </div>
+
+  <div class="foot"><span>MONSTER WORLD · 홈 화면 추가 안내</span><span>잘 안 되면 선생님께 휴대폰을 보여 줘!</span></div>
+</section>
+<script>
+try{const q=qrcode(0,'M');q.addData('https://classpoint.co.kr');q.make();document.getElementById('qr').innerHTML=q.createSvgTag({cellSize:4,margin:2,scalable:true})}catch(e){}
+</script>
+</body>
+</html>
