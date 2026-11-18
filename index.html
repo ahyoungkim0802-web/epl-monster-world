@@ -334,9 +334,9 @@ function monsterSVG(sp,stage,o={}){
   if(form&&form.image_url) return `<svg viewBox="0 0 200 200" role="img" aria-label="${esc(sp.name)}"><image href="${esc(form.image_url)}" width="200" height="200"/></svg>`;
   const c=sp.art||{},s=stage,B=c.body||'#ccc',L=c.belly||'#fff',A=c.accent||'#888',D=c.dark||'#555';
   const hy=[0,98,86,76][s],hr=[0,45,42,40][s],by=[0,146,140,136][s],bx=[0,34,40,46][s],bh=[0,26,36,46][s],ez=[0,1,1.12,1.28][s];
-  let g='';
-  if(s===3){g+=`<circle cx="100" cy="104" r="92" fill="${A}" opacity=".16"/><circle cx="100" cy="104" r="74" fill="${A}" opacity=".14"/>`;
-    for(const[x,y,z]of[[24,48,.7],[176,58,.9],[30,150,.6],[172,146,.7],[100,12,.8]])g+=markShape('star',x,y,z,A);}
+  let g='',halo='';
+  if(s===3){halo+=`<circle cx="100" cy="104" r="92" fill="${A}" opacity=".16"/><circle cx="100" cy="104" r="74" fill="${A}" opacity=".14"/>`;
+    for(const[x,y,z]of[[24,48,.7],[176,58,.9],[30,150,.6],[172,146,.7],[100,12,.8]])halo+=markShape('star',x,y,z,A);}
   // tail
   const tx=100+bx-6,ty=by+4;
   if(c.tail==='fox'){const n=s===3?2:1;for(let i=0;i<n;i++){const r=i?-22:0;g+=`<g transform="rotate(${r} ${tx} ${ty})"><path d="M${tx},${ty} C${tx+34*ez},${ty+6} ${tx+46*ez},${ty-30*ez} ${tx+26*ez},${ty-52*ez} C${tx+22*ez},${ty-34*ez} ${tx+8},${ty-22} ${tx-4},${ty-14}Z" fill="${B}"/><path d="M${tx+26*ez},${ty-52*ez} C${tx+38*ez},${ty-40*ez} ${tx+36*ez},${ty-26*ez} ${tx+28*ez},${ty-22*ez} C${tx+26*ez},${ty-32*ez} ${tx+24*ez},${ty-40*ez} ${tx+26*ez},${ty-52*ez}Z" fill="${L}"/></g>`}}
@@ -347,8 +347,14 @@ function monsterSVG(sp,stage,o={}){
   if(s===3){g+=`<path d="M${100-bx+6},${by-14} C${100-bx-34},${by-40} ${100-bx-40},${by+4} ${100-bx-22},${by+22} C${100-bx-16},${by+6} ${100-bx-6},${by} ${100-bx+8},${by+2}Z" fill="${A}"/><path d="M${100+bx-6},${by-14} C${100+bx+34},${by-40} ${100+bx+40},${by+4} ${100+bx+22},${by+22} C${100+bx+16},${by+6} ${100+bx+6},${by} ${100+bx-8},${by+2}Z" fill="${A}"/>`}
   // feet + body
   g+=`<ellipse cx="${100-bx*.5}" cy="${by+bh-3}" rx="${10+s*1.5}" ry="7" fill="${D}"/><ellipse cx="${100+bx*.5}" cy="${by+bh-3}" rx="${10+s*1.5}" ry="7" fill="${D}"/>`;
+  for(const sx of[-1,1])g+=`<path d="M${100+sx*bx*.5-4},${by+bh-6} v4 M${100+sx*bx*.5+4},${by+bh-6} v4" stroke="${B}" stroke-width="1.8" stroke-linecap="round" opacity=".7"/>`;
+  // 팔과 손: 왼팔은 내리고 오른팔은 반갑게 들어 올림
+  {const aw=7+s*1.2,pr=6+s*1.1,lx=100-bx+4,ly=by-bh*.35,rx=100+bx-4,ry=by-bh*.4,lpx=lx-12-s*2,lpy=by+bh*.32,rpx=rx+15+s*2,rpy=by-bh*.95-6;
+   g+=`<path d="M${lx},${ly} Q${lx-10},${(ly+lpy)/2} ${lpx},${lpy}" fill="none" stroke="${B}" stroke-width="${aw*2}" stroke-linecap="round"/><circle cx="${lpx}" cy="${lpy}" r="${pr}" fill="${L}"/>`;
+   g+=`<path d="M${rx},${ry} Q${rx+14},${(ry+rpy)/2+6} ${rpx},${rpy}" fill="none" stroke="${B}" stroke-width="${aw*2}" stroke-linecap="round"/><circle cx="${rpx}" cy="${rpy}" r="${pr}" fill="${L}"/>`;
+   for(const[cx,cy,dir]of[[lpx,lpy,1],[rpx,rpy,-1]])g+=`<path d="M${cx-pr*.45},${cy+dir*pr*.25} v${dir*pr*.5} M${cx+pr*.45},${cy+dir*pr*.25} v${dir*pr*.5}" stroke="${D}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>`}
   g+=`<ellipse cx="100" cy="${by}" rx="${bx}" ry="${bh}" fill="${B}"/><ellipse cx="100" cy="${by+bh*.18}" rx="${bx*.62}" ry="${bh*.68}" fill="${L}"/>`;
-  if(s>=2)g+=`<ellipse cx="${100-bx+3}" cy="${by-2}" rx="8" ry="${12+s*2}" fill="${B}" transform="rotate(18 ${100-bx+3} ${by-2})"/><ellipse cx="${100+bx-3}" cy="${by-2}" rx="8" ry="${12+s*2}" fill="${B}" transform="rotate(-18 ${100+bx-3} ${by-2})"/>`;
+  g+=`<ellipse cx="${100-bx*.42}" cy="${by-bh*.42}" rx="${bx*.28}" ry="${bh*.22}" fill="#fff" opacity=".22" transform="rotate(-28 ${100-bx*.42} ${by-bh*.42})"/>`;
   if(s===3)g+=markShape(c.mark,100,by+bh*.2,1.25,A);
   // ears
   const ear=(sx)=>{const x=100+sx*hr*.62,t=c.ears;
@@ -362,12 +368,12 @@ function monsterSVG(sp,stage,o={}){
     return ''};
   g+=ear(-1)+ear(1);
   // head + face
-  g+=`<circle cx="100" cy="${hy}" r="${hr}" fill="${B}"/>`;
+  g+=`<ellipse cx="100" cy="${hy+hr*.92}" rx="${hr*.62}" ry="${hr*.16}" fill="${D}" opacity=".22"/><circle cx="100" cy="${hy}" r="${hr}" fill="${B}"/><ellipse cx="${100-hr*.4}" cy="${hy-hr*.46}" rx="${hr*.3}" ry="${hr*.17}" fill="#fff" opacity=".3" transform="rotate(-28 ${100-hr*.4} ${hy-hr*.46})"/>`;
   if(c.ears==='owl')g+=`<circle cx="${100-hr*.4}" cy="${hy}" r="${hr*.36}" fill="${L}"/><circle cx="${100+hr*.4}" cy="${hy}" r="${hr*.36}" fill="${L}"/>`;
   else g+=`<ellipse cx="100" cy="${hy+hr*.36}" rx="${hr*.56}" ry="${hr*.42}" fill="${L}"/>`;
   if(c.ears==='horn')g+=`<circle cx="${100-hr*.3}" cy="${hy-hr*.78}" r="${hr*.24}" fill="${L}"/><circle cx="100" cy="${hy-hr*.9}" r="${hr*.28}" fill="${L}"/><circle cx="${100+hr*.3}" cy="${hy-hr*.78}" r="${hr*.24}" fill="${L}"/>`;
   const ex=hr*.4,ey=hy+hr*.02,er=[0,hr*.15,hr*.14,hr*.13][s];
-  for(const sx of[-1,1]){g+=`<ellipse cx="${100+sx*ex}" cy="${ey}" rx="${er}" ry="${er*(s===1?1:1.18)}" fill="#28314B"/><circle cx="${100+sx*ex+er*.35}" cy="${ey-er*.4}" r="${er*.36}" fill="#fff"/>`;
+  for(const sx of[-1,1]){g+=`<ellipse cx="${100+sx*ex}" cy="${ey}" rx="${er}" ry="${er*(s===1?1:1.18)}" fill="#28314B"/><circle cx="${100+sx*ex+er*.35}" cy="${ey-er*.4}" r="${er*.36}" fill="#fff"/><circle cx="${100+sx*ex-er*.35}" cy="${ey+er*.42}" r="${er*.16}" fill="#fff" opacity=".8"/>`;
     if(s>=2)g+=`<path d="M${100+sx*(ex-er*1.5)},${ey-er*1.5} L${100+sx*(ex+er*1.3)},${ey-er*2.1}" stroke="${D}" stroke-width="3" stroke-linecap="round"/>`}
   if(c.ears==='owl')g+=`<path d="M100,${hy+hr*.12} l-5,7 l5,5 l5,-5Z" fill="${A}"/>`;
   else g+=`<ellipse cx="100" cy="${hy+hr*.24}" rx="3.6" ry="2.6" fill="#28314B"/><path d="M${100-7},${hy+hr*.36} Q100,${hy+hr*.52} ${100+7},${hy+hr*.36}" fill="none" stroke="#28314B" stroke-width="2" stroke-linecap="round"/>`;
@@ -375,7 +381,10 @@ function monsterSVG(sp,stage,o={}){
   // explorer scarf / master collar
   if(s===2)g+=`<path d="M${100-bx*.8},${by-bh*.72} Q100,${by-bh*.4} ${100+bx*.8},${by-bh*.72} L${100+bx*.7},${by-bh*.46} Q100,${by-bh*.12} ${100-bx*.7},${by-bh*.46}Z" fill="${A}"/><path d="M${100+bx*.4},${by-bh*.4} l10,20 l-13,-3Z" fill="${A}"/>`;
   if(s===3)g+=`<path d="M${100-bx*.74},${by-bh*.8} Q100,${by-bh*.5} ${100+bx*.74},${by-bh*.8} L${100+bx*.6},${by-bh*.58} Q100,${by-bh*.3} ${100-bx*.6},${by-bh*.58}Z" fill="${D}"/><circle cx="100" cy="${by-bh*.5}" r="5" fill="${L}"/>`;
-  return `<svg viewBox="0 0 200 200" role="img" aria-label="${esc(sp.name)} ${STN[s]}">${g}</svg>`;
+  // 테두리: 모양 전체를 진한 색으로 한 번 더 그려 스티커처럼 또렷하게
+  const ol=g.replace(/<(ellipse|circle|path|rect)\b([^>]*?)\/>/g,(m,tag,at)=>{const none=/fill="none"/.test(at),sw=+((at.match(/stroke-width="([\d.]+)"/)||[])[1]||0),a=at.replace(/ (fill|stroke|stroke-width|opacity|stroke-linecap|stroke-linejoin)="[^"]*"/g,'');
+    if(/opacity="\.[0-3]/.test(at))return '';return none?`<${tag}${a} fill="none" stroke="#2B2440" stroke-width="${sw+5}" stroke-linecap="round"/>`:`<${tag}${a} fill="#2B2440" stroke="#2B2440" stroke-width="6" stroke-linejoin="round"/>`});
+  return `<svg viewBox="0 0 200 200" role="img" aria-label="${esc(sp.name)} ${STN[s]}">${halo}<ellipse cx="100" cy="${by+bh+3}" rx="${bx*1.05}" ry="7" fill="#2B2440" opacity=".14"/>${ol}${g}</svg>`;
 }
 function eggSVG(sp){const c=(sp&&sp.art)||{body:'#D9D2F3',accent:'#B8A7E8',belly:'#fff'};
   return `<svg viewBox="0 0 200 200" role="img" aria-label="몬스터 알"><ellipse cx="100" cy="176" rx="46" ry="8" fill="#28314b18"/><path d="M100,30 C140,30 160,90 160,124 C160,160 132,178 100,178 C68,178 40,160 40,124 C40,90 60,30 100,30Z" fill="${c.belly}" stroke="${c.accent}" stroke-width="4"/><circle cx="78" cy="96" r="13" fill="${c.body}"/><circle cx="124" cy="126" r="17" fill="${c.body}"/><circle cx="96" cy="150" r="8" fill="${c.accent}"/><circle cx="118" cy="72" r="7" fill="${c.accent}"/></svg>`}
