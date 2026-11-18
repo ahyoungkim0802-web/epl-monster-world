@@ -1230,10 +1230,10 @@ const mapZones=()=>(W&&W.set&&Array.isArray(W.set.map_zones)&&W.set.map_zones.le
 const zoneOf=(lv,Z)=>{let k=0;Z.forEach((z,j)=>{if(lv>=z.from)k=j});return k};
 function mapPt(t){const P=MAP_P,u=Math.max(0,Math.min(1,t))*(P.length-1),i=Math.min(P.length-2,Math.floor(u)),f=u-i;return[P[i][0]+(P[i+1][0]-P[i][0])*f,P[i][1]+(P[i+1][1]-P[i][1])*f]}
 function lvT(lv,Z){const n=Z.length,i=zoneOf(lv,Z),a=Z[i].from,b=i+1<n?Z[i+1].from:((W.set&&W.set.max_level)||50)+1;return(i+Math.max(0,Math.min(.92,(lv-a)/Math.max(1,b-a))))/n}
-function mapMark(r,x,y,me){if(r.name==null&&!me)return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#FFFDF6" stroke="#28314B66" stroke-width="2"/>`;const sp=r.species_id?spOf(r.species_id):null,sz=me?42:28,inner=(sp?monsterSVG(sp,r.stage):eggSVG(null)).replace('<svg ',`<svg x="${(x-sz/2).toFixed(1)}" y="${(y-sz/2-1).toFixed(1)}" width="${sz}" height="${sz}" `);
+function mapMark(r,x,y,me,sz0,label=true){if(r.name==null&&!me)return `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="7" fill="#FFFDF6" stroke="#28314B66" stroke-width="2"/>`;const sp=r.species_id?spOf(r.species_id):null,sz=me?42:(sz0||28),inner=(sp?monsterSVG(sp,r.stage):eggSVG(null)).replace('<svg ',`<svg x="${(x-sz/2).toFixed(1)}" y="${(y-sz/2-1).toFixed(1)}" width="${sz}" height="${sz}" `);
   return `<g class="mk" data-act="mapWho" data-n="${esc(r.name)} · Lv.${r.level}" data-vk="${esc(r.vk||'')}"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${sz/2+3}" fill="${me?'#FFD27A':'#FFFDF6'}" stroke="${me?'#A8781F':'#28314B66'}" stroke-width="2"/>${inner}`+
     (me?`<rect x="${(x-30).toFixed(1)}" y="${(y+sz/2+5).toFixed(1)}" width="60" height="17" rx="8.5" fill="#28314B"/><text x="${x.toFixed(1)}" y="${(y+sz/2+17).toFixed(1)}" text-anchor="middle" class="mkme">나 · Lv.${r.level}</text>`
-       :`<text x="${x.toFixed(1)}" y="${(y+sz/2+13).toFixed(1)}" text-anchor="middle" class="mkn">${esc(r.name)}</text>`)+`</g>`}
+       :label?`<text x="${x.toFixed(1)}" y="${(y+sz/2+13).toFixed(1)}" text-anchor="middle" class="mkn">${esc(r.name)}</text>`:'')+`<title>${esc(r.name)} · Lv.${r.level}</title></g>`}
 async function loadMap(){try{UI.map=await api.rpc('map')||[]}catch(e){UI.map=[];toast(e.message,true)}}
 function viewMap(){const Z=mapZones(),n=Z.length,rows=UI.map||[],me=W.me.id,by=Z.map(()=>[]);for(const r of rows)by[zoneOf(r.level,Z)].push(r);
   const mine=rows.find(r=>r.student_id===me),mz=mine?zoneOf(mine.level,Z):-1,nz=Z[mz+1];
@@ -1241,7 +1241,18 @@ function viewMap(){const Z=mapZones(),n=Z.length,rows=UI.map||[],me=W.me.id,by=Z
     tint+=`<ellipse cx="200" cy="${py.toFixed(1)}" rx="220" ry="${Math.round(560/n/1.6)}" fill="${ZC[i%5]}" opacity=".3"/>`;
     lm+=MAP_LM[i%5](x,py)+`<text x="${x}" y="${(py+40).toFixed(1)}" text-anchor="middle" class="zl">${esc(z.name)}</text><text x="${x}" y="${(py+54).toFixed(1)}" text-anchor="middle" class="zk">${esc(z.ko||'')} · Lv.${z.from}+</text>`});
   if(W.me.role==='student'&&mz>=0){const[px,py]=mapPt((mz+.5)/n),cx=px<200?340:60,cy=py-46;lm+=`<g class="mk" data-act="caveOpen" role="button" aria-label="단어 동굴 입구"><path d="M${cx-20},${cy+16} Q${cx-17},${cy-14} ${cx},${cy-17} Q${cx+17},${cy-14} ${cx+20},${cy+16}Z" fill="#6E5A44" stroke="#4A3B2C" stroke-width="2"/><path d="M${cx-9},${cy+16} Q${cx-8},${cy-3} ${cx},${cy-4} Q${cx+8},${cy-3} ${cx+9},${cy+16}Z" fill="#1A1C2B"/><circle cx="${cx-3}" cy="${cy+7}" r="1.6" fill="#F4D58D"/><circle cx="${cx+3}" cy="${cy+7}" r="1.6" fill="#F4D58D"/><title>단어 동굴 입구</title></g>`}
-  const grp={};let marks='',meMark='';for(const r of rows.slice().reverse()){const t=lvT(r.level,Z),key=Math.round(t*120),k=grp[key]=(grp[key]??-1)+1,[x0,y0]=mapPt(t),ag=k*2.4,rad=k?20+5*Math.floor(k/6):0,s=mapMark(r,x0+Math.cos(ag)*rad,y0+Math.sin(ag)*rad,r.student_id===me);if(r.student_id===me)meMark=s;else marks+=s}
+  /* 같은 자리에 몰린 학생: 나를 가운데, 나머지는 벌집 모양으로 촘촘히. 무리 전체를 지도 안으로 당기고, 많으면 +N 으로 묶음 */
+  const grp=new Map();for(const r of rows){const t=lvT(r.level,Z),key=Math.round(t*120);if(!grp.has(key))grp.set(key,{t,list:[]});grp.get(key).list.push(r)}
+  const HEX=[[0,0]];for(let ring=1;ring<=2;ring++)for(let side=0;side<6;side++)for(let st=0;st<ring;st++){const a0=Math.PI/3*side,a1=Math.PI/3*(side+1),f=st/ring;HEX.push([ring*(Math.cos(a0)*(1-f)+Math.cos(a1)*f),ring*(Math.sin(a0)*(1-f)+Math.sin(a1)*f)])}
+  let marks='',meMark='';for(const {t,list} of grp.values()){const [x0,y0]=mapPt(t);
+    if(list.length===1){const r=list[0],s=mapMark(r,x0,y0,r.student_id===me);if(r.student_id===me)meMark=s;else marks+=s;continue}
+    const mineR=list.find(r=>r.student_id===me),others=list.filter(r=>r!==mineR),cap=HEX.length-1,shown=others.slice(0,mineR?cap-1:cap),rest=others.length-shown.length;
+    const d=mineR?38:31,used=(mineR?1:0)+shown.length+(rest?1:0),rings=used<=1?0:used<=7?1:2,R=rings*d+16;
+    const cx=Math.max(R+6,Math.min(400-R-6,x0)),cy=Math.max(R+6,Math.min(640-R-(mineR&&rings===0?30:8),y0));
+    let slot=0;const at=()=>{const h=HEX[mineR?slot+1:slot]||HEX[HEX.length-1];slot++;return[cx+h[0]*d,cy+h[1]*d]};
+    for(const r of shown){const [x,y]=at();marks+=mapMark(r,x,y,false,24,false)}
+    if(rest){const [x,y]=at();marks+=`<g class="mk" data-act="mapWho" data-n="이 지역 친구 ${rest}명 더"><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="15" fill="#28314B"/><text x="${x.toFixed(1)}" y="${(y+4).toFixed(1)}" text-anchor="middle" class="mkme">+${rest}</text></g>`}
+    if(mineR)meMark=mapMark(mineR,cx,cy,true)}
   const pts=MAP_P.map(p=>p.join(',')).join(' '),wave=(x,y)=>`<path d="M${x},${y} q7,-6 14,0 t14,0" fill="none" stroke="#ffffffaa" stroke-width="2" stroke-linecap="round"/>`;
   const svg=`<svg class="wmap" viewBox="0 0 400 640" role="img" aria-label="MONSTER WORLD 지도"><defs><clipPath id="mwIsl"><path d="${MAP_ISL}"/></clipPath></defs><rect width="400" height="640" fill="#9FCFDF"/>${[[8,190],[372,380],[6,480],[350,96],[18,40]].map(([x,y])=>wave(x,y)).join('')}
     <path d="${MAP_ISL}" fill="#EFE3C4" stroke="#C7B184" stroke-width="3"/><g clip-path="url(#mwIsl)">${tint}</g>
@@ -1322,7 +1333,7 @@ function beep(kind){if(!SND.on)return;try{const AC=window.AudioContext||window.w
   const N=kind==='ok'?[[660,0],[988,.09]]:kind==='win'?[[523,0],[659,.12],[784,.24],[1047,.38]]:[[220,0],[165,.13]];
   for(const[f,t]of N){const o=C.createOscillator(),g=C.createGain(),st=C.currentTime+t,len=kind==='win'&&t>.3?.5:.22;o.type=kind==='no'?'square':'triangle';o.frequency.value=f;
     g.gain.setValueAtTime(.0001,st);g.gain.exponentialRampToValueAtTime(kind==='no'?.08:.22,st+.02);g.gain.exponentialRampToValueAtTime(.0001,st+len);o.connect(g);g.connect(C.destination);o.start(st);o.stop(st+len+.05)}}catch(e){}}
-function say(t,delay=0){if(!SND.on||!t||!window.speechSynthesis)return;const go=()=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.9;
+function say(t,delay=0){if(!SND.on||!t||!window.speechSynthesis)return;const go=()=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance(String(t));u.lang='en-US';u.rate=.72;
   const v=bestVoice();if(v){u.voice=v;u.lang=v.lang}u.pitch=1;speechSynthesis.speak(u)}catch(e){}};delay?setTimeout(go,delay):go()}
 /* 원어민 목소리 고르기: 장난용 목소리(Whisper·Bad News 등)는 빼고, 자연스러운 목소리를 먼저 */
 const VOICE_BAD=/albert|bad news|bahh|bells|boing|bubbles|cellos|deranged|good news|hysterical|jester|junior|organ|superstar|trinoids|whisper|wobble|zarvox|ralph|fred|kathy|princess|grandma|grandpa|eddy|flo|reed|rocko|sandy|shelley|novelty/i;
