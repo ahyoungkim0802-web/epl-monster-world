@@ -4,6 +4,7 @@
 -- v2.3: 마을 지도(mw_map, map_zones), 진화 단계 이름 Rookie · Elite · Legend
 -- v2.4: 지도 이름 표시 설정(map_name_mode: nickname·masked·real·hidden) — 서버에서 가려서 보냄
 -- v2.5: 스탯(독해·작문·어휘·성실)과 스탯 목표 달성 몬스터, 새 몬스터 3종, 선생님 선물은 시즌 한정 + 사유 필수
+-- v2.6: 진화 = 레벨 + 진화석. AR +1 → 진화석, NELT +1 → 전설석. Elite: 진화석·전설석 1개 / Legend: 전설석 1개 또는 진화석 2개
 -- v2.1: 학생이 스스로 '다 했어요' 요청(mw_self_report), 북라이팅·북퀴즈 활동 추가
 -- Supabase > SQL Editor 에 전체를 붙여 넣고 실행합니다. 여러 번 실행해도 안전합니다.
 -- 실행 후 학원을 만들 때마다 맨 아래 "학원 만들기" 한 줄을 실행합니다.
@@ -226,6 +227,7 @@ begin
     "self_report_acts": ["vocab","textbook","bookwriting","bookquiz","homework"],
     "map_name_mode": "nickname",
     "map_zones": [{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
+    "activity_stones": {"ar":"evo","nelt":"legend"},
     "activity_stats": {"reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
     "stat_rewards": [{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
     "reading_milestones": [{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]
@@ -449,8 +451,7 @@ begin
   v_max := greatest(1, (mw_setting(v_ac, 'max_level'))::int);
   v_xp := greatest(0, m.xp + p_amount);
   v_lvl := least(v_max, 1 + v_xp / v_per);
-  select 1 + count(*) into v_stage from jsonb_array_elements_text(mw_setting(v_ac, 'evolve_levels')) e where e::int <= v_lvl;
-  v_stage := least(3, v_stage);
+  v_stage := m.stage;   -- v2.6: 진화는 레벨 + 진화석(mw_evolve)으로만. XP가 늘거나 줄어도 진화 단계는 바뀌지 않음
   update mw_monsters set xp = v_xp, level = v_lvl, stage = v_stage,
          seen_level = least(seen_level, v_lvl), seen_stage = least(seen_stage, v_stage)
    where id = m.id;
@@ -483,6 +484,28 @@ language sql stable security definer set search_path = public as $$
                         and ((l.mission_id is not null and r.mission_id = l.mission_id)
                           or (l.book_id is not null and r.book_id = l.book_id)))
      group by 1) t;
+$$;
+
+-- 진화석 잔액: 받은 돌(activity_stones 활동의 취소되지 않은 지급 1건 = 1개) − 쓴 돌(mw_rewards 'evo:<몬스터>:<단계>:<사용>')
+-- Demo.stoneBalance 와 같은 규칙
+create or replace function mw_stone_balance(p_student uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  with cfg as (select coalesce(mw_setting(p.academy_id, 'activity_stones'), '{}'::jsonb) as m from mw_profiles p where p.id = p_student),
+  earned as (
+    select cfg.m ->> l.reason as k, count(*)::int as n
+      from mw_ledger l, cfg
+     where l.student_id = p_student and l.kind = 'grant' and l.amount > 0 and cfg.m ? l.reason
+       and not exists (select 1 from mw_ledger r where r.student_id = l.student_id and r.kind = 'revoke'
+                        and ((l.mission_id is not null and r.mission_id = l.mission_id)
+                          or (l.book_id is not null and r.book_id = l.book_id)))
+     group by 1),
+  spent as (
+    select coalesce(sum(case split_part(reward_key, ':', 4) when 'evo' then 1 when 'evo2' then 2 else 0 end), 0)::int as evo,
+           coalesce(sum(case split_part(reward_key, ':', 4) when 'legend' then 1 else 0 end), 0)::int as legend
+      from mw_rewards where student_id = p_student and reward_key like 'evo:%')
+  select jsonb_build_object(
+    'evo',    greatest(0, coalesce((select n from earned where k = 'evo'), 0)    - (select evo from spent)),
+    'legend', greatest(0, coalesce((select n from earned where k = 'legend'), 0) - (select legend from spent)));
 $$;
 
 -- 정해진 몬스터 알 지급. 이미 가진 몬스터면 같은 등급의 다른 미보유 몬스터로 대신 지급
@@ -641,6 +664,42 @@ begin
     raise exception '이미 등록한 책입니다.'; end if;
   insert into mw_books(student_id, title, title_key) values (auth.uid(), v_title, mw_title_key(v_title)) returning id into v_id;
   return v_id;
+end $$;
+
+-- 진화석 조회: 본인 또는 우리 학원 선생님만
+create or replace function mw_stones(p_student uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if not ((p_student = auth.uid() and mw_student_ok()) or mw_same(p_student)) then raise exception '볼 수 없는 학생입니다.'; end if;
+  return mw_stone_balance(p_student);
+end $$;
+
+-- 진화: 학생이 자기 몬스터를 골라 돌을 써서 진화. 레벨 조건(evolve_levels) + 돌
+--   Rookie→Elite: 'evo'(진화석 1) 또는 'legend'(전설석 1) / Elite→Legend: 'legend'(전설석 1) 또는 'evo2'(진화석 2)
+-- Demo.F.evolve 와 같은 규칙입니다.
+create or replace function mw_evolve(p_monster uuid, p_use text) returns int
+language plpgsql security definer set search_path = public as $$
+declare m mw_monsters; v_need int; v_bal jsonb; v_to int;
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  perform 1 from mw_profiles where id = auth.uid() for update;   -- 같은 돌을 동시에 두 번 쓰지 못하게
+  select * into m from mw_monsters where id = p_monster and student_id = auth.uid() and hatched for update;
+  if not found then raise exception '진화시킬 수 있는 몬스터가 아닙니다.'; end if;
+  if m.stage >= 3 then raise exception '이미 최종 단계입니다.'; end if;
+  v_to := m.stage + 1;
+  v_need := (mw_setting(mw_my_academy(), 'evolve_levels') ->> (m.stage - 1))::int;
+  if v_need is null or m.level < v_need then raise exception '레벨이 부족합니다. Lv.%부터 진화할 수 있습니다.', v_need; end if;
+  if not ((v_to = 2 and p_use in ('evo','legend')) or (v_to = 3 and p_use in ('legend','evo2'))) then
+    raise exception '사용할 수 없는 진화 방법입니다.'; end if;
+  v_bal := mw_stone_balance(auth.uid());
+  if (p_use = 'evo' and (v_bal ->> 'evo')::int < 1) or (p_use = 'evo2' and (v_bal ->> 'evo')::int < 2)
+     or (p_use = 'legend' and (v_bal ->> 'legend')::int < 1) then
+    raise exception '진화석이 부족합니다.'; end if;
+  insert into mw_rewards(student_id, reward_key) values (auth.uid(), 'evo:' || m.id || ':' || v_to || ':' || p_use);
+  update mw_monsters set stage = v_to where id = m.id;
+  perform mw_badge(auth.uid(), case when v_to = 2 then 'evo_explorer' else 'evo_master' end);
+  perform mw_log('evolve', auth.uid(), jsonb_build_object('monster', m.id, 'stage', v_to, 'use', p_use));
+  return v_to;
 end $$;
 
 -- 스탯 조회: 본인 또는 우리 학원 선생님만
@@ -892,7 +951,7 @@ declare v_old jsonb; v_ac uuid := mw_my_academy();
 begin
   perform mw_need_teacher();
   if p_key not in ('xp_per_level','max_level','evolve_levels','weekly_xp_goal','activity_xp','reading_milestones',
-                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards') then
+                   'point_rate','point_name','stages','activity_labels','self_report_acts','activity_list','map_zones','map_name_mode','activity_stats','stat_rewards','activity_stones') then
     raise exception '알 수 없는 설정입니다.'; end if;
   if p_key = 'activity_xp' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
@@ -905,6 +964,10 @@ begin
        select 1 from jsonb_array_elements(p_value) e
         where jsonb_typeof(e) <> 'string' or (e #>> '{}') !~ '^[a-z0-9_]{1,24}$')) then
     raise exception '활동 목록 형식이 올바르지 않습니다.'; end if;
+  if p_key = 'activity_stones' and (jsonb_typeof(p_value) <> 'object' or exists (
+       select 1 from jsonb_each(p_value) e
+        where e.key !~ '^[a-z0-9_]{1,24}$' or jsonb_typeof(e.value) <> 'string' or (e.value #>> '{}') not in ('evo','legend'))) then
+    raise exception '진화석 설정이 올바르지 않습니다.'; end if;
   if p_key = 'activity_stats' and (jsonb_typeof(p_value) <> 'object' or exists (
        select 1 from jsonb_each(p_value) e
         where e.key !~ '^[a-z0-9_]{1,24}$' or jsonb_typeof(e.value) <> 'string' or (e.value #>> '{}') not in ('read','write','vocab','grit'))) then
@@ -1003,7 +1066,7 @@ begin
     begin execute format('revoke all on function %s from authenticated', f.sig); exception when others then null; end;
     if f.proname not in ('mw_apply_xp','mw_grant_egg','mw_badge','mw_book_rewards','mw_on_signup','mw_need_teacher',
                          'mw_need_student','mw_setting','mw_log','mw_create_academy','mw_set_academy',
-                         'mw_stat_values','mw_stat_rewards','mw_grant_species') then
+                         'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;

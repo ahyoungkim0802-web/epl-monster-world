@@ -72,7 +72,7 @@ body.busy [data-act]{pointer-events:none;opacity:.7}
 .hero{position:relative;border-radius:26px;padding:18px 18px 20px;overflow:hidden;color:#fff;
   background:radial-gradient(120% 90% at 50% 0%,#3B4677 0%,#242B4A 58%,#181D33 100%);border:1px solid #2E365A}
 .hero::before{content:"";position:absolute;inset:auto -10% -42% -10%;height:62%;background:radial-gradient(closest-side,#8F7BE055,#8F7BE000);pointer-events:none}
-.hero .pill{background:#ffffff1f;color:#fff}.hero .lv{background:#ffffff1a;border:1px solid #ffffff2e}.hero .bar{background:#ffffff1a;border-color:#ffffff33}.hero .next{background:#ffffff14;color:#fff}.hero .mname span{color:#C9BCF5}
+.hero .pill{background:#ffffff1f;color:#fff}.hero .lv{background:#323B66;border:1px solid #ffffff2e}.hero .bar{background:#ffffff1a;border-color:#ffffff33}.hero .next{background:#ffffff14;color:#fff}.hero .mname span{color:#C9BCF5}
 .hero .stars i{position:absolute;width:5px;height:5px;border-radius:50%;background:#fff;opacity:.9;animation:tw 3s ease-in-out infinite}
 @keyframes tw{50%{opacity:.25;transform:scale(.6)}}
 .hero-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;position:relative}
@@ -90,6 +90,10 @@ body.busy [data-act]{pointer-events:none;opacity:.7}
 .bar i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--lav-deep),var(--lav) 60%,var(--coral));transition:width .8s cubic-bezier(.2,.8,.2,1)}
 .xp-row{display:flex;justify-content:space-between;font-size:12.5px;margin-top:6px;font-weight:600}
 .next{margin-top:10px;background:#ffffffb8;border-radius:14px;padding:9px 12px;font-size:13px;display:flex;justify-content:space-between;gap:8px;position:relative}
+
+/* evolution */
+.hero .next.evo{width:100%;border:1px solid #FFD27A;background:#FFD27A2b;color:#fff;cursor:pointer;font:inherit;text-align:left}
+.stones{position:relative;display:flex;gap:14px;justify-content:center;margin-top:8px;font-size:12.5px;opacity:.9}
 
 /* stats */
 .stat{margin-top:10px}.stat:first-of-type{margin-top:0}.stat-h{display:flex;justify-content:space-between;font-size:13.5px;margin-bottom:4px}.bar.sm{height:9px}
@@ -259,6 +263,7 @@ const stg=()=>(W&&W.set&&Array.isArray(W.set.stages)?W.set.stages:[]);const PN=(
 const ACT_DEF=Object.fromEntries(Object.entries(ACT_BASE).map(([k,v])=>[k,v[1]]));
 const acCode=()=>{try{return (new URLSearchParams(location.search).get('a')||localStorage.getItem('mw_academy')||'').toLowerCase()}catch(e){return ''}};
 const STN=['','Rookie','Elite','Legend'];
+const STONE={evo:['진화석','💠'],legend:['전설석','🔶']};
 const STAT={read:['독해','#4F94C0'],write:['작문','#C9932B'],vocab:['어휘','#7C63C9'],grit:['성실','#D9704E']};
 const RAR={starter:['스타터',''],common:['일반','gray'],rare:['희귀','rare'],seasonal:['시즌 한정','wait']};
 const DEMO=!(CONFIG.SUPABASE_URL&&CONFIG.SUPABASE_ANON_KEY);
@@ -371,6 +376,7 @@ const DEF_SET={point_name:'포인트',stages:['Reader','Builder','Writer','Speak
   self_report_acts:["vocab","textbook","bookwriting","bookquiz","homework"],
   map_name_mode:'nickname',
   map_zones:[{"from":1,"name":"Starter Village","ko":"시작의 마을"},{"from":10,"name":"Whisper Woods","ko":"속삭이는 숲"},{"from":20,"name":"Gale Canyon","ko":"바람의 협곡"},{"from":30,"name":"Starlight Harbor","ko":"별빛 항구"},{"from":40,"name":"Ember Citadel","ko":"불꽃 성채"}],
+  activity_stones:{ar:'evo',nelt:'legend'},
   activity_stats:{"reading":"read","bookquiz":"read","ar":"read","textbook":"read","bookwriting":"write","writing":"write","grammar":"write","vocab":"vocab","syntax":"vocab","attend":"grit","homework":"grit","good":"grit","praise":"grit"},
   stat_rewards:[{"stat":"read","at":1000,"species":"tiddle"},{"stat":"read","at":5000,"species":"aurorix"},{"stat":"write","at":1000,"species":"nimbo"},{"stat":"write","at":5000,"species":"quillo"},{"stat":"vocab","at":1000,"species":"lexi"},{"stat":"vocab","at":5000,"species":"runex"},{"stat":"grit","at":1000,"species":"pebblo"},{"stat":"grit","at":5000,"species":"terron"}],
   reading_milestones:[{"books":10,"reward":"badge","id":"reader10"},{"books":30,"reward":"badge","id":"reader30"},{"books":50,"reward":"badge","id":"reader50"},{"books":100,"reward":"badge","id":"master_reader"}]};
@@ -417,7 +423,7 @@ const Demo={
     if(!pool.length)return;const sp=pool[Math.floor(Math.random()*pool.length)];
     this.st.monsters.push({id:uuid(),student_id:s,species_id:sp.id,nickname:'',xp:0,level:1,stage:1,seen_level:1,seen_stage:1,hatched:false,source,obtained_at:new Date().toISOString()})},
   xp(s,mid,amt,kind,reason,mission,book){const m=this.st.monsters.find(x=>x.id===mid&&x.student_id===s&&x.hatched);if(!m)throw new Error('성장시킬 몬스터가 없습니다.');
-    const was=m.level;m.xp=Math.max(0,m.xp+amt);const r=this.calc(m.xp,this.st.set);m.level=r.level;m.stage=r.stage;m.seen_level=Math.min(m.seen_level,m.level);m.seen_stage=Math.min(m.seen_stage,m.stage);
+    const was=m.level;m.xp=Math.max(0,m.xp+amt);const r=this.calc(m.xp,this.st.set);m.level=r.level;m.seen_level=Math.min(m.seen_level,m.level);m.seen_stage=Math.min(m.seen_stage,m.stage);
     this.st.ledger.push({id:uuid(),student_id:s,monster_id:mid,amount:amt,kind,reason:reason||'',mission_id:mission||null,book_id:book||null,level_after:m.level,actor:this.uid,created_at:new Date().toISOString()});
     if(kind==='grant'&&amt>0)this.statRewards(s);
     if(m.level>=10)this.badge(s,'lv10');if(m.level>=25)this.badge(s,'lv25');if(m.stage>=2)this.badge(s,'evo_explorer');if(m.stage>=3)this.badge(s,'evo_master');
@@ -425,6 +431,10 @@ const Demo={
   bookRewards(s){const n=this.st.books.filter(b=>b.student_id===s&&b.status==='approved').length;
     for(const ms of this.st.set.reading_milestones)if(ms.books<=n){const k='books:'+ms.books+':'+ms.reward;if(this.st.rewards.some(x=>x.student_id===s&&x.reward_key===k))continue;this.st.rewards.push({student_id:s,reward_key:k});
       if(ms.reward==='egg')this.egg(s,'common','원서 '+ms.books+'권');else if(ms.reward==='rare_egg')this.egg(s,'rare','원서 '+ms.books+'권');else this.badge(s,ms.id||'reader'+ms.books)}},
+  stoneBalance(s){const map=this.st.set.activity_stones||{},L=this.st.ledger,rv=new Set(L.filter(l=>l.student_id===s&&l.kind==='revoke').flatMap(l=>[l.mission_id,l.book_id]).filter(Boolean)),e={evo:0,legend:0},sp={evo:0,legend:0};
+    for(const l of L)if(l.student_id===s&&l.kind==='grant'&&l.amount>0&&map[l.reason]&&!(l.mission_id&&rv.has(l.mission_id))&&!(l.book_id&&rv.has(l.book_id)))e[map[l.reason]]++;
+    for(const r of this.st.rewards)if(r.student_id===s&&r.reward_key.startsWith('evo:')){const u=r.reward_key.split(':')[3];if(u==='evo')sp.evo++;else if(u==='evo2')sp.evo+=2;else if(u==='legend')sp.legend++}
+    return{evo:Math.max(0,e.evo-sp.evo),legend:Math.max(0,e.legend-sp.legend)}},
   statValues(s){const map=this.st.set.activity_stats||{},L=this.st.ledger,rv=new Set(L.filter(l=>l.student_id===s&&l.kind==='revoke').flatMap(l=>[l.mission_id,l.book_id]).filter(Boolean)),o={};
     for(const l of L)if(l.student_id===s&&l.kind==='grant'&&l.amount>0&&map[l.reason]&&!(l.mission_id&&rv.has(l.mission_id))&&!(l.book_id&&rv.has(l.book_id)))o[map[l.reason]]=(o[map[l.reason]]||0)+l.amount;return o},
   grantSpecies(s,id,source){const sp=SPECIES_SEED.find(x=>x.id===id);if(sp&&!this.st.monsters.some(m=>m.student_id===s&&m.species_id===id)){this.st.monsters.push({id:uuid(),student_id:s,species_id:id,nickname:'',xp:0,level:1,stage:1,seen_level:1,seen_stage:1,hatched:false,source,obtained_at:new Date().toISOString()});return}this.egg(s,sp?sp.rarity:'common',source)},
@@ -473,10 +483,17 @@ const Demo={
     adjust_xp(a){this.T();if(!a.amount||Math.abs(a.amount)>1000)throw new Error('정정 XP는 ±1~1000 사이여야 합니다.');if(!(a.reason||'').trim())throw new Error('정정 사유를 입력해 주세요.');const p=this.st.profiles.find(x=>x.id===a.student);if(!p||!p.active_monster)throw new Error('대표 몬스터가 없습니다.');this.xp(a.student,p.active_monster,a.amount,'adjust',a.reason)},
     gift_egg(a){this.T();const why=(a.reason||'').trim();if(why.length<2)throw new Error('선물 사유를 입력해 주세요.');if(!SPECIES_SEED.some(x=>x.id===a.species&&x.rarity==='seasonal'))throw new Error('선생님 선물은 시즌 한정 몬스터만 가능합니다.');
       if(this.st.monsters.some(m=>m.student_id===a.student&&m.species_id===a.species))throw new Error('이미 가지고 있는 몬스터입니다.');this.st.monsters.push({id:uuid(),student_id:a.student,species_id:a.species,nickname:'',xp:0,level:1,stage:1,seen_level:1,seen_stage:1,hatched:false,source:'선생님 선물 · '+why.slice(0,40),obtained_at:new Date().toISOString()})},
+    stones(a){const me=this.me();if(!me||!me.active)throw new Error('볼 수 없는 학생입니다.');if(me.role!=='teacher'&&a.student!==me.id)throw new Error('볼 수 없는 학생입니다.');return this.stoneBalance(a.student)},
+    evolve(a){const me=this.me();if(!me||!me.active||me.role!=='student')throw new Error('승인된 학생 계정이 아닙니다.');const m=this.st.monsters.find(x=>x.id===a.monster&&x.student_id===me.id&&x.hatched);
+      if(!m)throw new Error('진화시킬 수 있는 몬스터가 아닙니다.');if(m.stage>=3)throw new Error('이미 최종 단계입니다.');const to=m.stage+1,need=this.st.set.evolve_levels[m.stage-1];
+      if(need==null||m.level<need)throw new Error(`레벨이 부족합니다. Lv.${need}부터 진화할 수 있습니다.`);if(!((to===2&&['evo','legend'].includes(a.use))||(to===3&&['legend','evo2'].includes(a.use))))throw new Error('사용할 수 없는 진화 방법입니다.');
+      const b=this.stoneBalance(me.id);if((a.use==='evo'&&b.evo<1)||(a.use==='evo2'&&b.evo<2)||(a.use==='legend'&&b.legend<1))throw new Error('진화석이 부족합니다.');
+      this.st.rewards.push({student_id:me.id,reward_key:'evo:'+m.id+':'+to+':'+a.use});m.stage=to;this.badge(me.id,to===2?'evo_explorer':'evo_master');return to},
     stats(a){const me=this.me();if(!me||!me.active)throw new Error('볼 수 없는 학생입니다.');if(me.role!=='teacher'&&a.student!==me.id)throw new Error('볼 수 없는 학생입니다.');return this.statValues(a.student)},
     set_stage(a){this.T();const p=this.st.profiles.find(x=>x.id===a.student);if(p)p.epl_stage=a.stage},
     set_setting(a){this.T();const K=/^[a-z0-9_]{1,24}$/,v=a.value;
       if(a.key==='activity_xp'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!Number.isInteger(x)||x<-5000||x>5000)))throw new Error('활동 XP는 -5000~5000 사이 정수여야 합니다.');
+      if(a.key==='activity_stones'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!['evo','legend'].includes(x))))throw new Error('진화석 설정이 올바르지 않습니다.');
       if(a.key==='activity_stats'&&(!v||typeof v!=='object'||Array.isArray(v)||Object.entries(v).some(([k,x])=>!K.test(k)||!['read','write','vocab','grit'].includes(x))))throw new Error('활동별 스탯 설정이 올바르지 않습니다.');
       if(a.key==='stat_rewards'&&(!Array.isArray(v)||v.length>24||v.some(r=>!r||!['read','write','vocab','grit'].includes(r.stat)||!Number.isInteger(r.at)||r.at<1||r.at>1e6||!K.test(r.species||''))))throw new Error('스탯 몬스터 기준이 올바르지 않습니다. 필요 스탯은 1 이상의 정수여야 합니다.');
       if(a.key==='map_name_mode'&&!['nickname','masked','real','hidden'].includes(v))throw new Error('이름 표시 방식이 올바르지 않습니다.');
@@ -585,6 +602,14 @@ function missionRow(m){const a=ACT[m.activity]||['··',m.activity];let act='';
   else if(m.status==='approved')act=`<span class="pill ok">승인 +${m.xp}</span>`;
   else if(m.status==='rejected')act=`<button class="btn sm" data-act="reqMission" data-id="${m.id}">다시 요청</button>`;
   return `<div class="mi"><div class="chip a-${esc(m.activity)}">${a[0]}</div><div class="t"><b>${esc(m.title||a[1])}</b><span>${a[1]}${m.status==='rejected'?' · 다시 확인이 필요합니다':''}</span></div>${m.status==='approved'?'':`<span class="xpv">${m.xp} XP</span>`}${act}</div>`}
+function evoOpts(m){const need=W.set.evolve_levels[m.stage-1],b=W.stones||{},o=[];if(!m||m.stage>=3||need==null||m.level<need)return o;
+  if(m.stage===1){if((b.evo||0)>=1)o.push(['evo','진화석 1개']);if((b.legend||0)>=1)o.push(['legend','전설석 1개'])}else{if((b.legend||0)>=1)o.push(['legend','전설석 1개']);if((b.evo||0)>=2)o.push(['evo2','진화석 2개'])}return o}
+function stoneHint(kind){const S=W.set.activity_stones||{},a=Object.keys(S).filter(k=>S[k]===kind&&ACT[k]).map(k=>ACT[k][1]);return a.length?a.join(', '):'선생님이 정한 활동'}
+function evoBox(m){const set=W.set,need=set.evolve_levels[m.stage-1],mx=m.level>=set.max_level;
+  if(m.stage>=3||need==null)return `<div class="next"><span>진화</span><b>${mx?'최고 레벨 달성 · 새 알을 부화해 보세요':'Legend 달성 · Lv.'+set.max_level+' 도전'}</b></div>`;
+  if(m.level<need)return `<div class="next"><span>다음 진화</span><b>Lv.${need} ${STN[m.stage+1]} · ${need-m.level}레벨 남음</b></div>`;
+  if(evoOpts(m).length)return `<button class="next evo" data-act="evoOpen" data-id="${m.id}"><span>${STN[m.stage+1]} 진화 가능</span><b>진화시키기 →</b></button>`;
+  return `<div class="next"><span>진화 준비 완료</span><b>${m.stage===1?`진화석 1개 필요 · ${esc(stoneHint('evo'))}`:`전설석 1개 또는 진화석 2개 필요`}</b></div>`}
 function statCard(){const st=W.stats||{},R=(W.set.stat_rewards||[]);
   return `<section class="card"><h3>내 영어 스탯 <small>승인된 XP 기준</small></h3>${Object.entries(STAT).map(([k,[lb,c]])=>{const v=st[k]||0,nx=R.filter(r=>r.stat===k&&r.at>v).sort((a,b)=>a.at-b.at)[0],sp=nx&&spOf(nx.species),own=sp&&W.monsters.some(m=>m.species_id===sp.id);
     return `<div class="stat"><div class="stat-h"><b>${lb}</b><span class="num">${v.toLocaleString('en-US')}</span></div><div class="bar sm"><i style="width:${nx?Math.min(100,Math.round(v/nx.at*100)):100}%;background:${c}"></i></div><span class="tiny muted">${nx?`${nx.at.toLocaleString('en-US')} 달성 시 ${sp&&!own?esc(sp.name):'새 몬스터'} 획득`:'모든 목표 달성'}</span></div>`}).join('')}</section>`}
@@ -617,7 +642,7 @@ function viewStudent(){
       <div class="mon">${monsterSVG(sp,m.stage)}</div>
       <div class="mname"><span>${esc(sp.name)} · ${STN[m.stage].toUpperCase()}</span><b>${esc(m.nickname||formName(sp,m.stage))}</b></div>
       <div class="xp"><div class="bar"><i style="width:${pct}%"></i></div><div class="xp-row"><span class="num">${mx?'MAX':inl+' / '+per+' XP'}</span><span>${mx?'최고 레벨 달성':'다음 레벨까지 <span class="num">'+(per-inl)+'</span> XP'}</span></div></div>
-      <div class="next"><span>다음 진화</span><b>${m.stage>=3||!nextEvo?(mx?'새 알을 부화해 다음 몬스터를 키워 보세요':'Legend 달성 · Lv.'+set.max_level+' 도전'):'Lv.'+nextEvo+' '+STN[m.stage+1]+' · '+Math.max(0,nextEvo-m.level)+'레벨 남음'}</b></div>
+      ${evoBox(m)}<div class="stones">${Object.entries(STONE).map(([k,[n,i]])=>`<span>${i} ${n} <b class="num">${(W.stones||{})[k]||0}</b></span>`).join('')}</div>
      </section>
      ${eggs.length?`<div class="card" style="border-color:var(--coral)"><h3>새 몬스터 알 획득 <small>${esc(eggs[0].source)}</small></h3><button class="btn p" data-act="tab" data-t="dex">도감에서 부화하기</button></div>`:''}
      ${selfReportCard(t0)}
@@ -730,10 +755,10 @@ function viewTeacher(){
     const wk=n=>avg?Math.ceil((n-1)*s.xp_per_level/avg)+'주':'—';
     main=`<div class="grid g2"><form class="card stack" id="fSet"><h3>레벨·진화 기준</h3>
       <div class="row"><label class="field" style="flex:1">레벨당 필요 XP<input id="sPer" type="number" min="50" max="5000" value="${s.xp_per_level}"></label><label class="field" style="flex:1">최고 레벨<input id="sMax" type="number" min="10" max="100" value="${s.max_level}"></label></div>
-      <div class="row"><label class="field" style="flex:1">Elite 진화 레벨<input id="sE1" type="number" min="2" value="${s.evolve_levels[0]}"></label><label class="field" style="flex:1">Legend 진화 레벨<input id="sE2" type="number" min="3" value="${s.evolve_levels[1]}"></label></div>
+      <div class="row"><label class="field" style="flex:1">Elite 진화 레벨 (+ 진화석)<input id="sE1" type="number" min="2" value="${s.evolve_levels[0]}"></label><label class="field" style="flex:1">Legend 진화 레벨 (+ 전설석)<input id="sE2" type="number" min="3" value="${s.evolve_levels[1]}"></label></div>
       <label class="field">주간 XP 목표<input id="sWk" type="number" min="0" value="${s.weekly_xp_goal}"></label>
       <h3 style="margin:6px 0 0">활동 목록 <small>이름·XP·학생 요청 여부 수정 · 음수는 차감</small></h3>
-      <div class="tw"><table><thead><tr><th>활동 이름</th><th class="r">XP</th><th>스탯</th><th>학생 요청</th><th></th></tr></thead><tbody id="actRows">${[...actList(s),'reading'].map(k=>actRow(k,ACT[k]?ACT[k][1]:k,s.activity_xp[k]??0,(s.self_report_acts||[]).includes(k),(s.activity_stats||{})[k])).join('')}</tbody></table></div>
+      <div class="tw"><table><thead><tr><th>활동 이름</th><th class="r">XP</th><th>스탯</th><th>진화석</th><th>학생 요청</th><th></th></tr></thead><tbody id="actRows">${[...actList(s),'reading'].map(k=>actRow(k,ACT[k]?ACT[k][1]:k,s.activity_xp[k]??0,(s.self_report_acts||[]).includes(k),(s.activity_stats||{})[k],(s.activity_stones||{})[k])).join('')}</tbody></table></div>
       <div><button type="button" class="btn sm" data-act="actAdd">+ 활동 추가</button></div>
       <p class="tiny muted">'학생 요청'에 체크한 활동은 학생 화면의 '다 했어요'에 나오고, 나머지는 선생님이 빠른 지급으로 줍니다. 차감 항목은 학생 요청으로 둘 수 없습니다. 원서 읽기는 독서 탭에서 요청합니다.</p>
       <h3 style="margin:6px 0 0">스탯 몬스터 기준 <small>스탯이 이 값에 닿으면 그 몬스터 알 지급</small></h3>
@@ -792,21 +817,21 @@ function viewMap(){const Z=mapZones(),n=Z.length,rows=UI.map||[],me=W.me.id,by=Z
   return `<div class="stack"><div><h2 style="font-size:20px">MONSTER WORLD 맵</h2><p class="muted">레벨이 오르면 길을 따라 위로 올라갑니다.${mine?` 지금 <b>${esc(Z[mz].ko||Z[mz].name)}</b>에 있습니다.${nz?` 다음 지역까지 <b class="num">Lv.${nz.from}</b>입니다.`:''}`:''} 몬스터를 누르면 이름이 보입니다.</p></div>
    <div class="card" style="padding:8px">${svg}</div>
    <section class="card"><h3>지역별 학생 <small>${rows.length}명</small></h3>${Z.map((z,i)=>({z,i})).reverse().map(({z,i})=>`<div class="mi"><div class="chip num" style="background:${ZC[i%5]}55">${i+1}</div><div class="t"><b>${esc(z.name)} <span class="tiny muted">${esc(z.ko||'')} · Lv.${z.from}+</span></b><span>${by[i].filter(r=>r.name!=null||r.student_id===me).map(r=>r.student_id===me?`<b>${esc(r.name)} Lv.${r.level}</b>`:`${esc(r.name)} Lv.${r.level}`).join(' · ')||(by[i].length?'이름 비공개':'아직 도착한 학생이 없습니다.')}</span></div><span class="pill gray">${by[i].length}명</span></div>`).join('')}</section></div>`}
-const actRow=(k,l,x,sf,st)=>`<tr data-k="${esc(k)}"><td><input class="inp al" maxlength="24" value="${esc(l)}" aria-label="활동 이름" placeholder="예: 발표 참여"></td><td class="r"><input class="inp ax num" type="number" min="-5000" max="5000" step="1" value="${x}" aria-label="XP" style="width:96px"></td><td><select class="inp ast" aria-label="스탯">${[['','없음'],...Object.entries(STAT).map(([v,[t]])=>[v,t])].map(([v,t])=>`<option value="${v}" ${(st||'')===v?'selected':''}>${t}</option>`).join('')}</select></td><td>${k==='reading'?'<span class="tiny muted">독서 탭</span>':`<input type="checkbox" class="as" aria-label="학생 요청" ${sf?'checked':''}>`}</td><td class="r">${k==='reading'?'':'<button type="button" class="btn sm d" data-act="actDel">삭제</button>'}</td></tr>`;
-function readActs(){const ax={},lb={},list=[],self=[],stats={};for(const tr of document.querySelectorAll('#actRows tr[data-k]')){const k=tr.dataset.k,l=tr.querySelector('.al').value.trim(),x=Number(tr.querySelector('.ax').value);
+const actRow=(k,l,x,sf,st,sn)=>`<tr data-k="${esc(k)}"><td><input class="inp al" maxlength="24" value="${esc(l)}" aria-label="활동 이름" placeholder="예: 발표 참여"></td><td class="r"><input class="inp ax num" type="number" min="-5000" max="5000" step="1" value="${x}" aria-label="XP" style="width:96px"></td><td><select class="inp ast" aria-label="스탯">${[['','없음'],...Object.entries(STAT).map(([v,[t]])=>[v,t])].map(([v,t])=>`<option value="${v}" ${(st||'')===v?'selected':''}>${t}</option>`).join('')}</select></td><td><select class="inp asn" aria-label="진화석">${[['','없음'],['evo','진화석'],['legend','전설석']].map(([v,t])=>`<option value="${v}" ${(sn||'')===v?'selected':''}>${t}</option>`).join('')}</select></td><td>${k==='reading'?'<span class="tiny muted">독서 탭</span>':`<input type="checkbox" class="as" aria-label="학생 요청" ${sf?'checked':''}>`}</td><td class="r">${k==='reading'?'':'<button type="button" class="btn sm d" data-act="actDel">삭제</button>'}</td></tr>`;
+function readActs(){const ax={},lb={},list=[],self=[],stats={},stones={};for(const tr of document.querySelectorAll('#actRows tr[data-k]')){const k=tr.dataset.k,l=tr.querySelector('.al').value.trim(),x=Number(tr.querySelector('.ax').value);
     if(!l)throw new Error('비어 있는 활동 이름이 있습니다. 이름을 넣거나 그 줄을 삭제해 주세요.');if(!Number.isInteger(x)||x<-5000||x>5000)throw new Error(`${l}: XP는 -5000~5000 사이 정수로 입력해 주세요.`);
-    if(Object.values(lb).includes(l))throw new Error(`같은 이름의 활동이 있습니다: ${l}`);ax[k]=x;lb[k]=l;const sv=tr.querySelector('.ast').value;if(sv)stats[k]=sv;if(k==='reading')continue;list.push(k);
+    if(Object.values(lb).includes(l))throw new Error(`같은 이름의 활동이 있습니다: ${l}`);ax[k]=x;lb[k]=l;const sv=tr.querySelector('.ast').value;if(sv)stats[k]=sv;const sn=tr.querySelector('.asn').value;if(sn){if(x<=0)throw new Error(`${l}: 진화석은 XP가 0보다 큰 활동에만 걸 수 있습니다.`);stones[k]=sn}if(k==='reading')continue;list.push(k);
     const c=tr.querySelector('.as');if(c&&c.checked){if(x<0)throw new Error(`${l}: 차감 항목은 학생 요청으로 둘 수 없습니다.`);self.push(k)}}
-  if(!list.length)throw new Error('활동이 하나 이상 있어야 합니다.');return{ax,lb,list,self,stats}}
+  if(!list.length)throw new Error('활동이 하나 이상 있어야 합니다.');return{ax,lb,list,self,stats,stones}}
 function ledgerTable(L,withName){if(!L.length)return '<div class="empty">내역이 없습니다.</div>';
   return `<div class="tw"><table><thead><tr><th>일시</th>${withName?'<th>학생</th>':''}<th>구분</th><th>내용</th><th class="r">XP</th><th></th></tr></thead><tbody>${L.map(l=>{const rev=l.kind==='grant'&&(l.mission_id||l.book_id)&&!W.ledgerRevoked?.has(l.mission_id||l.book_id);
     return `<tr><td class="num">${fmtD(l.created_at)}</td>${withName?`<td><b>${esc(stuName(l.student_id))}</b></td>`:''}<td><span class="pill ${l.kind==='grant'?'ok':l.kind==='revoke'?'no':'wait'}">${{grant:'지급',revoke:'취소',adjust:'정정'}[l.kind]}</span></td><td>${esc(ACT[l.reason]?.[1]||l.reason)}</td><td class="r num"><b>${l.amount>0?'+':''}${l.amount}</b></td><td class="r">${rev?`<button class="btn sm d" data-act="revoke" data-m="${l.mission_id||''}" data-b="${l.book_id||''}">지급 취소</button>`:''}</td></tr>`}).join('')}</tbody></table></div>`}
 async function openStudent(id){const p=W.profiles.find(x=>x.id===id);if(!p)return;let d;try{d=await api.loadStudent(id)}catch(e){return toast(e.message,true)}
   const mons=W.monsters.filter(m=>m.student_id===id),nb=d.books.filter(b=>b.status==='approved').length;
   const revoked=new Set(d.ledger.filter(l=>l.kind==='revoke').map(l=>l.mission_id||l.book_id));W.ledgerRevoked=new Set([...(W.ledgerRevoked||[]),...revoked]);
-  const giftable=W.species.filter(s=>s.rarity==='seasonal'&&!mons.some(m=>m.species_id===s.id));let st={};try{st=await api.rpc('stats',{student:id})||{}}catch(e){}
+  const giftable=W.species.filter(s=>s.rarity==='seasonal'&&!mons.some(m=>m.species_id===s.id));let st={},sn={};try{st=await api.rpc('stats',{student:id})||{}}catch(e){}try{sn=await api.rpc('stones',{student:id})||{}}catch(e){}
   modal(`<h2>${esc(p.display_name)} <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack">
-   <div class="card"><h3>몬스터 성장 기록 <small>원서 ${nb}권</small></h3><div class="chips" style="margin-bottom:10px">${Object.entries(STAT).map(([k,[lb]])=>`<span class="pill gray">${lb} ${(st[k]||0).toLocaleString('en-US')}</span>`).join('')}</div><div class="row">${mons.map(m=>{const sp=spOf(m.species_id);return `<div style="text-align:center;width:92px">${m.hatched?monsterSVG(sp,m.stage):eggSVG(null)}<b class="tiny">${m.hatched?esc(sp.name)+' Lv.'+m.level:'알(미부화)'}</b><br><span class="tiny muted">${m.hatched?m.xp+' XP':esc(m.source)}${m.id===p.active_monster?' · 대표':''}</span></div>`}).join('')||'<span class="muted">스타터 미선택</span>'}</div></div>
+   <div class="card"><h3>몬스터 성장 기록 <small>원서 ${nb}권</small></h3><div class="chips" style="margin-bottom:10px">${Object.entries(STAT).map(([k,[lb]])=>`<span class="pill gray">${lb} ${(st[k]||0).toLocaleString('en-US')}</span>`).join('')}${Object.entries(STONE).map(([k,[n,i]])=>`<span class="pill rare">${i} ${n} ${sn[k]||0}</span>`).join('')}</div><div class="row">${mons.map(m=>{const sp=spOf(m.species_id);return `<div style="text-align:center;width:92px">${m.hatched?monsterSVG(sp,m.stage):eggSVG(null)}<b class="tiny">${m.hatched?esc(sp.name)+' Lv.'+m.level:'알(미부화)'}</b><br><span class="tiny muted">${m.hatched?m.xp+' XP':esc(m.source)}${m.id===p.active_monster?' · 대표':''}</span></div>`}).join('')||'<span class="muted">스타터 미선택</span>'}</div></div>
    <div class="card stack"><h3>영어 역량 단계 <small>XP와 무관 · 선생님 평가</small></h3><div class="chips">${stg().map(s=>`<button class="ck ${p.epl_stage===s?'on':''}" data-act="setStage" data-id="${id}" data-s="${s}">${s}</button>`).join('')}</div></div>
    <form class="card stack" id="fAddBook" data-id="${id}"><h3>독서 실적 바로 등록 <small>등록 즉시 승인</small></h3><div class="row"><input class="inp" id="abTitle" style="flex:1;min-width:180px" maxlength="120" placeholder="책 제목" required><button class="btn p">등록·승인</button></div></form>
    <form class="card stack" id="fAdjust" data-id="${id}"><h3>XP 정정 <small>대표 몬스터에 반영 · 사유 필수</small></h3><div class="row"><input class="inp" id="adAmt" type="number" style="width:110px" placeholder="±XP" required><input class="inp" id="adWhy" style="flex:1;min-width:160px" maxlength="200" placeholder="정정 사유" required><button class="btn">정정</button></div></form>
@@ -818,7 +843,8 @@ async function openStudent(id){const p=W.profiles.find(x=>x.id===id);if(!p)retur
 /* ================= 라우팅 ================= */
 const wkStart=()=>{const d=weekStart();d.setDate(d.getDate()+7*UI.wk);return d};
 async function loadWeekly(){try{UI.weekly=await api.weekly(ymd(wkStart()))||[]}catch(e){UI.weekly=[];toast(e.message,true)}}
-async function refresh(){W=await api.load();if(W&&W.set)buildAct(W.set);if(W&&W.me&&W.me.role==='student'&&W.me.active){try{W.stats=await api.rpc('stats',{student:W.me.id})||{}}catch(e){W.stats={}}}if(W&&W.me&&W.me.role==='teacher'&&W.me.active&&UI.ttab==='weekly')await loadWeekly();render()}
+async function refresh(){W=await api.load();if(W&&W.set)buildAct(W.set);if(W&&W.me&&W.me.role==='student'&&W.me.active){try{W.stats=await api.rpc('stats',{student:W.me.id})||{}}catch(e){W.stats={}}try{W.stones=await api.rpc('stones',{student:W.me.id})||{}}catch(e){W.stones={}}
+    const pv=UI.stones;if(pv&&((W.stones.evo||0)>(pv.evo||0)||(W.stones.legend||0)>(pv.legend||0)))setTimeout(()=>toast('새 진화석을 얻었습니다. 진화할 수 있는지 확인해 보세요.'),300);UI.stones=W.stones}if(W&&W.me&&W.me.role==='teacher'&&W.me.active&&UI.ttab==='weekly')await loadWeekly();render()}
 function render(){
   if(!W)return viewLogin(UI.loginMode);
   if(!W.me){$('#app').innerHTML=`<div class="login"><div class="card stack"><h3>계정 정보를 찾을 수 없습니다</h3><p class="muted">선생님께 계정 등록을 요청해 주세요.</p><button class="btn" data-act="logout">로그아웃</button></div></div>`;return}
@@ -851,15 +877,19 @@ const A={
      <div class="card"><div class="mi"><div class="t"><b>${esc(m.nickname||sp.name)}</b><span>${esc(sp.animal)} · ${esc(sp.concept)}</span></div><span class="pill ${RAR[sp.rarity][1]}">${RAR[sp.rarity][0]}</span></div>
       <div class="mi"><div class="t"><span>현재 레벨</span></div><b class="num">Lv.${m.level}</b></div><div class="mi"><div class="t"><span>누적 XP</span></div><b class="num">${m.xp}</b></div><div class="mi"><div class="t"><span>획득 날짜</span></div><b class="num">${ymd(m.hatched_at||m.obtained_at)}</b></div><div class="mi"><div class="t"><span>획득 경로</span></div><b>${esc(m.source)}</b></div></div>
      <div class="card"><h3>최근 성장 기록</h3>${L.length?L.map(l=>`<div class="mi"><div class="t"><b>${esc(ACT[l.reason]?.[1]||l.reason)}</b><span>${fmtD(l.created_at)}</span></div><span class="xpv">${l.amount>0?'+':''}${l.amount}</span></div>`).join(''):'<div class="empty">아직 기록이 없습니다.</div>'}</div>
-     ${m.id===W.me.active_monster?'<p class="tiny muted" style="text-align:center">지금 함께 성장하는 대표 몬스터입니다.</p>':`<button class="btn p" data-act="setActive" data-id="${m.id}">대표 몬스터로 지정 — 앞으로 받는 XP가 이 몬스터에게 쌓입니다</button>`}</div>`)},
+     ${evoOpts(m).length?`<button class="btn p" data-act="evoOpen" data-id="${m.id}">${STN[m.stage+1]}로 진화시키기</button>`:''}${m.id===W.me.active_monster?'<p class="tiny muted" style="text-align:center">지금 함께 성장하는 대표 몬스터입니다.</p>':`<button class="btn p" data-act="setActive" data-id="${m.id}">대표 몬스터로 지정 — 앞으로 받는 XP가 이 몬스터에게 쌓입니다</button>`}</div>`)},
   async setActive(d){closeModal();if(await call('set_active',{monster:d.id},'대표 몬스터를 바꿨습니다.')){UI.tab='home';render()}},
   // teacher
   async decideM(d){const ids=[...UI.selM];if(!ids.length)return toast('승인할 요청을 선택해 주세요.',true);const ok=d.ok==='1';const r=await call('decide_missions',{ids,approve:ok},r=>ok?`${r.done}건 승인 · XP 지급 완료`+(r.skipped?` (스타터 미선택 ${r.skipped}건 제외)`:''):`${r.done}건 반려`);if(r)UI.selM.clear(),render()},
   async decideB(d){const ids=[...UI.selB];if(!ids.length)return toast('승인할 독서 요청을 선택해 주세요.',true);const ok=d.ok==='1';const r=await call('decide_books',{ids,approve:ok,comp:null},r=>ok?`독서 ${r.done}권 승인`:`${r.done}건 반려`);if(r)UI.selB.clear(),render()},
   mapWho(d){toast(d.n)},
+  evoOpen(d){const m=W.monsters.find(x=>x.id===d.id);if(!m)return;const sp=spOf(m.species_id),o=evoOpts(m);if(!o.length)return toast('지금은 진화할 수 없습니다.',true);
+    modal(`<h2>${esc(m.nickname||sp.name)} 진화 <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack"><div class="card"><div class="forms" style="grid-template-columns:1fr 1fr">${[m.stage,m.stage+1].map(s=>`<div>${monsterSVG(sp,s)}${STN[s]}</div>`).join('')}</div></div>
+      <p class="muted">사용할 돌을 고르세요. 진화는 되돌릴 수 없습니다.</p>${o.map(([u,t])=>`<button class="btn p" data-act="evoDo" data-id="${m.id}" data-u="${u}">${t}로 ${STN[m.stage+1]} 진화</button>`).join('')}</div>`)},
+  async evoDo(d){closeModal();await call('evolve',{monster:d.id,use:d.u})},
   qAct(d){UI.qa=d.a;render()},
   actAdd(){const r=document.querySelector('#actRows tr[data-k="reading"]');if(!r)return;if(document.querySelectorAll('#actRows tr[data-k]').length>40)return toast('활동은 40개까지 만들 수 있습니다.',true);
-    r.insertAdjacentHTML('beforebegin',actRow('c'+Math.random().toString(36).slice(2,8),'',0,false,''));r.previousElementSibling.querySelector('.al').focus()},
+    r.insertAdjacentHTML('beforebegin',actRow('c'+Math.random().toString(36).slice(2,8),'',0,false,'',''));r.previousElementSibling.querySelector('.al').focus()},
   actDel(d,el){el.closest('tr').remove()},qStu(d){UI.qs.has(d.id)?UI.qs.delete(d.id):UI.qs.add(d.id);keep(render)},
   qAll(){const s=students();if(UI.qs.size>=s.length)UI.qs.clear();else s.forEach(p=>UI.qs.add(p.id));keep(render)},
   async quickGrant(){const n=UI.qs.size,r=await call('assign_missions',{students:[...UI.qs],activity:UI.qa,title:ACT[UI.qa][1],xp:null,due:today(),batch:uuid(),approve:true},r=>`${r.done}명 지급 완료`+(r.skipped?` · ${r.skipped}명 제외(스타터 미선택)`:''));if(r){UI.qs.clear();render()}},
@@ -891,10 +921,10 @@ document.addEventListener('submit',async e=>{e.preventDefault();const f=e.target
     else if(id==='fSet'){const n=x=>Math.round(Number($(x).value));const e1=n('#sE1'),e2=n('#sE2');if(!(e1<e2&&e2<=n('#sMax')))return toast('진화 레벨은 Elite < Legend ≤ 최고 레벨 순서여야 합니다.',true);
       let A,zones;try{A=readActs();zones=[...document.querySelectorAll('#zoneRows tr')].map(tr=>({from:Math.round(Number(tr.querySelector('.zf').value)),name:tr.querySelector('.zn').value.trim(),ko:tr.querySelector('.zk').value.trim()}));
         zones.forEach((z,i)=>{if(!z.name)throw new Error('지역 이름을 입력해 주세요.');if(i===0?z.from!==1:!(z.from>zones[i-1].from))throw new Error('마을 시작 레벨은 위에서 아래로 점점 커져야 합니다.')});
-        const sri=[...document.querySelectorAll('#srRows .sra')];var srs=(W.set.stat_rewards||[]).map((r,i)=>{const at=Number(sri[i]?sri[i].value:r.at);if(!Number.isInteger(at)||at<1||at>1e6)throw new Error('필요 스탯은 1 이상의 정수로 입력해 주세요.');return{...r,at}})}catch(err){return toast(err.message,true)}const{ax,lb,list,self,stats}=A;const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
+        const sri=[...document.querySelectorAll('#srRows .sra')];var srs=(W.set.stat_rewards||[]).map((r,i)=>{const at=Number(sri[i]?sri[i].value:r.at);if(!Number.isInteger(at)||at<1||at>1e6)throw new Error('필요 스탯은 1 이상의 정수로 입력해 주세요.');return{...r,at}})}catch(err){return toast(err.message,true)}const{ax,lb,list,self,stats,stones}=A;const ms=W.set.reading_milestones.map((m,i)=>({...m,books:n('#sm_'+i)}));
       document.body.classList.add('busy');const sg=$('#sStg').value.split(',').map(x=>x.trim()).filter(Boolean).slice(0,8);
       const cur=k=>k==='stages'?stg():k==='activity_labels'?(W.set.activity_labels||{}):W.set[k];
-      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['activity_stats',stats],['stat_rewards',srs],['map_name_mode',$('#sMapName').value],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
+      for(const[k,v]of[['stages',sg],['point_name',$('#sPn').value.trim()||'포인트'],['activity_labels',lb],['xp_per_level',n('#sPer')],['max_level',n('#sMax')],['evolve_levels',[e1,e2]],['weekly_xp_goal',n('#sWk')],['activity_xp',ax],['activity_list',list],['self_report_acts',self],['map_zones',zones],['activity_stats',stats],['activity_stones',stones],['stat_rewards',srs],['map_name_mode',$('#sMapName').value],['reading_milestones',ms]])if(JSON.stringify(cur(k))!==JSON.stringify(v))await api.rpc('set_setting',{key:k,value:v});await refresh();toast('기준을 저장했습니다.')}
     else if(id==='fRate'){const v=Number($('#rate').value);if(!(v>=0&&v<=100))return toast('환산 기준은 0~100 사이로 입력해 주세요.',true);await call('set_setting',{key:'point_rate',value:v},'환산 기준을 적용했습니다.')}
     else if(id==='fRevoke'){const why=$('#rvWhy').value.trim(),d=f.dataset;closeModal();const ok=d.m?await call('revoke_mission',{id:d.m,reason:why},'지급을 취소했습니다.'):await call('revoke_book',{id:d.b,reason:why},'독서 실적을 취소했습니다.');if(ok){(W.ledgerRevoked=W.ledgerRevoked||new Set()).add(d.m||d.b);render()}}
     else if(id==='fAddBook'){const sid=f.dataset.id;if(await call('add_book',{student:sid,title:$('#abTitle').value,comp:null},'독서 실적을 등록했습니다.'))openStudent(sid)}
