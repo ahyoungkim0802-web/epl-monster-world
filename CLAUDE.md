@@ -4,7 +4,7 @@
 
 ## 구조
 - 단일 `index.html` + Supabase(`schema.sql`). **빌드 과정 없음.**
-- 배포: GitHub Pages (main 브랜치 루트 `/`) — https://ahyoungkim0802-web.github.io/epl-monster-world/
+- 배포: GitHub Pages (main 브랜치 루트 `/`) — https://www.classpoint.co.kr/ (사용자 도메인. github.io 주소는 여기로 자동 이동)
 
 ## 실행 모드
 - `index.html` 상단 `CONFIG`가 비어 있으면 **체험 모드**(브라우저 안의 `Demo` 객체로 동작).
