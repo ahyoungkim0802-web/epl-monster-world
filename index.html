@@ -1089,7 +1089,7 @@ function viewLogin(mode){
 function myActive(){return W.monsters.find(m=>m.id===W.me.active_monster)}
 function viewStarter(){
   const st=W.species.filter(s=>s.rarity==='starter');
-  $('#app').innerHTML=`${demoBar()}<div class="wrap s">${header()}<div class="stack"><div><h2 style="font-size:22px">함께 성장할 첫 몬스터를 고르세요</h2><p class="muted">영어 미션을 완료할수록 몬스터가 자라고 진화합니다. 한 번 고르면 바꿀 수 없습니다.</p></div>
+  $('#app').innerHTML=`${demoBar()}<div class="wrap s">${header()}<div class="stack"><div><h2 style="font-size:22px">Choose Your First Monster</h2><p class="tiny muted" style="margin-top:-4px">함께 성장할 첫 몬스터를 고르세요</p><p class="muted">영어 미션을 완료할수록 몬스터가 자라고 진화합니다. 한 번 고르면 바꿀 수 없습니다.</p></div>
    <div class="starters">${st.map(s=>`<button class="sc ${UI.starter===s.id?'on':''}" data-act="pickStarter" data-id="${s.id}">${monsterSVG(s,1)}<b>${s.name}</b><span>${esc(s.animal)}</span><br><span class="pill">${esc(s.concept)}</span></button>`).join('')}</div>
    <div class="card stack"><label class="field">몬스터 이름 (최대 12자)<input id="nick" maxlength="12" placeholder="비워 두면 기본 이름을 씁니다"></label>
    <button class="btn p" data-act="confirmStarter" ${UI.starter?'':'disabled'}>이 몬스터와 시작하기</button></div></div></div>`;
@@ -1109,7 +1109,7 @@ function evoBox(m){const set=W.set,sp=spOf(m.species_id),need=sp?reqLv(sp,m.stag
   if(evoOpts(m).length)return `<button class="next evok" data-act="evoOpen" data-id="${m.id}"><span>${STN[m.stage+1]} 진화 가능</span><b>진화시키기 →</b></button>`;
   return `<div class="next"><span>진화 준비 완료</span><b>${m.stage===1?`진화석 1개 필요 · ${esc(stoneHint('evo'))}`:`전설석 1개 또는 진화석 2개 필요`}</b></div>`}
 function statCard(){const st=W.stats||{},R=(W.set.stat_rewards||[]);
-  return `<section class="card"><h3>내 영어 스탯 <small>승인된 XP 기준</small></h3>${Object.entries(STAT).map(([k,[lb,c]])=>{const v=st[k]||0,nx=R.filter(r=>r.stat===k&&r.at>v).sort((a,b)=>a.at-b.at)[0],sp=nx&&spOf(nx.species),own=sp&&W.monsters.some(m=>m.species_id===sp.id);
+  return `<section class="card"><h3>My English Stats <small>승인된 XP 기준</small></h3>${Object.entries(STAT).map(([k,[lb,c]])=>{const v=st[k]||0,nx=R.filter(r=>r.stat===k&&r.at>v).sort((a,b)=>a.at-b.at)[0],sp=nx&&spOf(nx.species),own=sp&&W.monsters.some(m=>m.species_id===sp.id);
     return `<div class="stat"><div class="stat-h"><b>${lb}</b><span class="num">${v.toLocaleString('en-US')}</span></div><div class="bar sm"><i style="width:${nx?Math.min(100,Math.round(v/nx.at*100)):100}%;background:${c}"></i></div><span class="tiny muted">${nx?`${nx.at.toLocaleString('en-US')} 달성 시 ${sp&&!own?esc(sp.name):'새 몬스터'} 획득`:'모든 목표 달성'}</span></div>`}).join('')}</section>`}
 function dexHint(s){if(s.rarity==='starter')return '처음 선택';if(s.rarity==='seasonal')return '시즌 이벤트 보상';const r=(W.set.stat_rewards||[]).find(x=>x.species===s.id);
   return r?`${STAT[r.stat]?STAT[r.stat][0]:r.stat} ${r.at.toLocaleString('en-US')} 달성`:s.rarity==='common'?'최고 레벨 달성 보상':'만나는 방법 준비 중'}
@@ -1128,13 +1128,13 @@ function viewDex(){const me=W.me,S=W.species,own=Object.fromEntries(W.monsters.m
     return `<button class="fam ${act?'on':''} ${can?'can':''}" data-act="dexOpen" data-id="${o.id}"><div class="fh">${no}<b>${esc(s.name)}</b><span class="tiny muted">${esc(s.name_ko||'')}</span><span class="sp"></span>${tags}</div>
       <div class="f3">${[1,2,3].map(t=>t<=o.stage?`<div class="fm">${monsterSVG(s,t,{thumb:1})}<b>${STN[t]}</b><span>${formId(s,t)}</span></div>`:t===o.stage+1&&can?`<div class="fm nx">${monsterSVG(s,t,{thumb:1})}<b>진화 가능</b><span>${formId(s,t)}</span></div>`:sil(s,t,'Lv.'+reqLv(s,t))).join('')}</div>
       <div class="ff"><span>${esc(o.nickname||formName(s,o.stage))} · Lv.${o.level}</span>${can?'<span class="pill no">진화 가능</span>':act?'<span class="pill">대표 몬스터</span>':''}</div></button>`};
-  return `<div class="stack"><div><h2 style="font-size:20px">몬스터 도감</h2><p class="muted">발견 <b class="num">${got}</b> / ${total} · 가문 <b class="num">${hm.length}</b> / ${S.length}</p><div class="dexbar"><i style="width:${total?Math.max(got?2:0,got/total*100).toFixed(1):0}%"></i></div></div>
+  return `<div class="stack"><div><h2 style="font-size:20px">Monster Dex</h2><p class="muted">발견 <b class="num">${got}</b> / ${total} · 가문 <b class="num">${hm.length}</b> / ${S.length}</p><div class="dexbar"><i style="width:${total?Math.max(got?2:0,got/total*100).toFixed(1):0}%"></i></div></div>
     <div class="row" style="gap:6px">${[['all','전체'],['own','획득'],['evo','진화 가능'],['none','미획득']].map(([k,l])=>`<button class="ck ${F===k?'on':''}" data-act="dexF" data-v="${k}">${l} ${cnt[k]}</button>`).join('')}
       ${els.length?`<select class="inp" id="dexE" aria-label="속성" style="width:auto;min-height:40px;padding:6px 10px"><option value="">모든 속성</option>${els.map(e=>`<option value="${e}" ${E===e?'selected':''}>${ELEM[e][0]}</option>`).join('')}</select>`:''}</div>
     ${list.length?`<div class="fams">${list.map(card).join('')}</div>`:'<div class="empty">여기에 해당하는 몬스터가 아직 없습니다.</div>'}
     <p class="tiny muted">검은 그림자는 아직 만나지 못한 모습입니다. 새 몬스터는 스탯 목표와 최고 레벨을 달성하면 얻습니다. 뽑기나 구매는 없습니다.</p></div>`}
 function streakCard(){const S=W.streaks||{},rows=Object.entries(S).filter(([a,v])=>ACT[a]&&v&&v.days>=2);if(!rows.length)return '';const wd=new Date().getDay(),weekend=wd===0||wd===6;
-  return `<section class="card"><h3>연속 기록 <small>평일만 셉니다 · 주말은 쉬어도 이어집니다</small></h3>${rows.map(([a,v])=>{const k=v.len%v.days,left=v.days-k,st=STONE[v.stone]||STONE.evo,nm=esc(ACT[a][1].replace(' 학습','').replace(' 완료',''));
+  return `<section class="card"><h3>Streaks <small>평일만 셉니다 · 주말은 쉬어도 이어집니다</small></h3>${rows.map(([a,v])=>{const k=v.len%v.days,left=v.days-k,st=STONE[v.stone]||STONE.evo,nm=esc(ACT[a][1].replace(' 학습','').replace(' 완료',''));
     const msg=v.len===0?'오늘 하면 1일째가 시작됩니다.':k===0?`${v.days}일 연속 달성! ${st[1]} ${st[0]}을 받았습니다. 다음 ${st[0]}까지 ${v.days}일`:`${left}일 더 하면 ${st[1]} ${st[0]} 1개`;
     const tip=weekend?'':v.today?'오늘 완료':`오늘 아직 · 하면 ${v.len+1}일째`;
     return `<div class="stack" style="gap:6px"><div class="row" style="justify-content:space-between"><b>🔥 ${nm} <span class="num">${v.len}</span>일째</b><span class="pill ${v.today?'ok':'gray'}">${tip||'주말'}</span></div>
@@ -1143,7 +1143,7 @@ function streakCard(){const S=W.streaks||{},rows=Object.entries(S).filter(([a,v]
 function selfReportCard(t0){const acts=((W.set&&W.set.self_report_acts)||[]).filter(a=>ACT[a]);if(!acts.length)return '';
   const st=a=>{const ms=W.missions.filter(x=>x.activity===a&&x.due_date===t0);if(ms.some(x=>['assigned','rejected'].includes(x.status)))return '';
     return ms.some(x=>x.status==='approved')?'완료':ms.some(x=>x.status==='requested')?'확인 중':''};
-  return `<section class="card"><h3>다 했어요 <small>마친 활동을 눌러 주세요</small></h3><div class="chips">${acts.map(a=>{const s=st(a);
+  return `<section class="card"><h3>✅ I Did It! <small>마친 활동을 눌러 주세요</small></h3><div class="chips">${acts.map(a=>{const s=st(a);
     return `<button class="ck" data-act="selfReport" data-a="${a}" ${s?'disabled':''}>${esc(ACT[a][1].replace(' 완료','').replace(' 통과',''))} <span class="num">${s||'+'+(W.set.activity_xp[a]??0)}</span></button>`}).join('')}<button class="ck" data-act="tab" data-t="books">책읽기 기록 →</button></div>
     <p class="tiny muted" style="margin-top:10px">활동마다 하루에 한 번 요청할 수 있습니다. 선생님이 확인하면 XP가 지급됩니다.</p></section>`}
 function dayXP(){const map={};for(const l of W.ledger){if(l.reason==='체험용 초기값')continue;const d=ymd(l.created_at);map[d]=(map[d]||0)+l.amount}return map}
@@ -1153,7 +1153,7 @@ function viewStudent(){
   const inl=mx?per:m.xp-(m.level-1)*per,pct=mx?100:Math.round(inl/per*100);
   const nextEvo=reqLv(sp,m.stage+1);
   const eggs=W.monsters.filter(x=>!x.hatched);
-  const tabs=[['home','홈'],['map','맵'],['house','집'],['dex','도감'],['books','독서']];
+  const tabs=[['home','Home'],['map','Map'],['house','My Room'],['dex','Monsters'],['books','Reading']];
   let main='';
   if(UI.tab==='home'){
     const t0=today(),open=W.missions.filter(x=>['assigned','requested','rejected'].includes(x.status)||(x.status==='approved'&&x.decided_at&&ymd(x.decided_at)===t0)).sort((a,b)=>(a.status==='approved')-(b.status==='approved'));
@@ -1169,19 +1169,19 @@ function viewStudent(){
       <div class="xp"><div class="bar"><i style="width:${pct}%"></i></div><div class="xp-row"><span class="num">${mx?'MAX':inl+' / '+per+' XP'}</span><span>${mx?'최고 레벨 달성':'다음 레벨까지 <span class="num">'+(per-inl)+'</span> XP'}</span></div></div>
       ${evoBox(m)}<div class="stones">${Object.entries(STONE).map(([k,[n,i]])=>`<span>${i} ${n} <b class="num">${(W.stones||{})[k]||0}</b></span>`).join('')}</div>
      </section>
-     ${eggs.length?`<div class="card" style="border-color:var(--coral)"><h3>새 몬스터 알 획득 <small>${esc(eggs[0].source)}</small></h3><button class="btn p" data-act="tab" data-t="dex">도감에서 부화하기</button></div>`:''}
+     ${eggs.length?`<div class="card" style="border-color:var(--coral)"><h3>New Egg! <small>${esc(eggs[0].source)}</small></h3><button class="btn p" data-act="tab" data-t="dex">도감에서 부화하기</button></div>`:''}
      ${duelCards()}${streakCard()}${selfReportCard(t0)}
-     <section class="card"><h3>오늘의 영어 미션 <small>${open.filter(x=>x.status==='approved').length} / ${open.length} 완료</small></h3>
+     <section class="card"><h3>Today's Missions <small>${open.filter(x=>x.status==='approved').length} / ${open.length} 완료</small></h3>
       ${open.length?open.map(missionRow).join(''):'<div class="empty">아직 오늘 요청한 미션이 없습니다. 활동을 마쳤으면 위의 \'다 했어요\'에서 골라 주세요.</div>'}
       <p class="tiny muted" style="margin-top:10px">완료 요청 후 선생님이 확인하면 XP가 지급됩니다.</p></section>
     </div><div class="stack">
      ${statCard()}
-     <section class="card"><h3>이번 주 학습 기록 <small>주간 목표 ${set.weekly_xp_goal} XP</small></h3>
+     <section class="card"><h3>This Week <small>주간 목표 ${set.weekly_xp_goal} XP</small></h3>
       <div class="week">${days.map((d,i)=>`<div class="${d===t0?'today':''}"><em>${vals[i]||''}</em><i style="height:${Math.round(vals[i]/vmax*72)}px"></i>${'월화수목금토일'[i]}</div>`).join('')}</div>
       <div class="bar" style="margin-top:12px"><i style="width:${Math.min(100,Math.round(wsum/Math.max(1,set.weekly_xp_goal)*100))}%"></i></div>
       <div class="kpis"><div class="kpi"><b>${wsum}</b><span>이번 주 XP</span></div><div class="kpi"><b>${streak}</b><span>연속 학습일</span></div><div class="kpi"><b>${nbooks}</b><span>읽은 원서</span></div></div></section>
      <button class="card cave-entry" data-act="tab" data-t="cal" style="background:#fff;color:#1F2747;border:1px solid #E6E1D3"><span style="font-size:28px">📅</span><span style="display:flex;flex-direction:column;gap:2px"><b>학습 캘린더</b><span style="color:#6B7390">공부한 날을 달력으로 보기</span></span><b style="margin-left:auto">→</b></button>
-     <section class="card"><h3>획득한 배지 <small>${owned.size} / ${Object.keys(BADGES).length}</small></h3><div class="badges">${Object.entries(BADGES).map(([k,v])=>`<span class="badge ${owned.has(k)?'':'off'}"><i></i>${v}</span>`).join('')}</div></section>
+     <section class="card"><h3>Badges <small>${owned.size} / ${Object.keys(BADGES).length}</small></h3><div class="badges">${Object.entries(BADGES).map(([k,v])=>`<span class="badge ${owned.has(k)?'':'off'}"><i></i>${v}</span>`).join('')}</div></section>
      ${SG.length?`<section class="card"><h3>영어 역량 단계 <small>선생님 평가로 결정</small></h3><div class="track" style="grid-template-columns:repeat(${SG.length},1fr)">${SG.map((s,i)=>`<div class="${i<si?'done':i===si?'now':''}">${s}</div>`).join('')}</div>
       <p class="tiny muted" style="margin-top:10px">몬스터 레벨과는 별개입니다. 평가와 수업 성취를 바탕으로 선생님이 정해 줍니다.</p></section>`:''}
     </div></div>`;
@@ -1192,13 +1192,13 @@ function viewStudent(){
   }else if(UI.tab==='books'){
     const ok=W.books.filter(b=>b.status==='approved'),n=ok.length,ms=set.reading_milestones.slice().sort((a,b)=>a.books-b.books),nx=ms.find(x=>x.books>n);
     const RW={egg:'새로운 몬스터 알',rare_egg:'희귀 몬스터 알',badge:'특별 배지'};
-    main=`<div class="grid g2"><div class="stack"><section class="card"><h3>원서 읽기 기록 <small>승인된 책만 실적으로 인정</small></h3>
+    main=`<div class="grid g2"><div class="stack"><section class="card"><h3>Reading Log <small>승인된 책만 실적으로 인정</small></h3>
       <div class="row" style="align-items:baseline"><b class="num" style="font-size:40px">${n}</b><span class="muted">권 완독</span></div>
       ${nx?`<div class="bar" style="margin:8px 0 6px"><i style="width:${Math.round(n/nx.books*100)}%"></i></div><p class="tiny"><b>${nx.books-n}권</b> 더 읽으면 ${nx.reward==='badge'?(BADGES[nx.id]||'특별')+' 배지':RW[nx.reward]} 획득</p>`:'<p class="tiny">모든 독서 목표를 달성했습니다.</p>'}
       <div style="margin-top:12px">${ms.map(x=>`<div class="mi"><div class="chip a-reading num">${x.books}</div><div class="t"><b>원서 ${x.books}권</b><span>${x.reward==='badge'?(BADGES[x.id]||'특별')+' 배지':RW[x.reward]}</span></div><span class="pill ${n>=x.books?'ok':'gray'}">${n>=x.books?'달성':'도전 중'}</span></div>`).join('')}</div></section>
-     <form class="card stack" id="fBook"><h3>읽은 책 기록하기</h3><label class="field">책 제목 (영어 원서)<input id="bTitle" maxlength="120" placeholder="예: Magic Tree House #1" required></label>
+     <form class="card stack" id="fBook"><h3>Add a Book</h3><label class="field">책 제목 (영어 원서)<input id="bTitle" maxlength="120" placeholder="예: Magic Tree House #1" required></label>
       <button class="btn p">완독 확인 요청</button><p class="tiny muted">선생님과 이해도 확인을 마치면 승인됩니다. 같은 책은 한 번만 기록됩니다.</p></form></div>
-     <section class="card"><h3>나의 책 목록 <small>${W.books.length}권</small></h3>${W.books.length?W.books.slice().sort((a,b)=>b.created_at.localeCompare(a.created_at)).map(b=>`<div class="mi"><div class="t"><b>${esc(b.title)}</b><span>${fmtD(b.created_at)}</span></div><span class="pill ${b.status==='approved'?'ok':b.status==='requested'?'wait':'no'}">${{approved:'승인',requested:'확인 중',rejected:'다시 확인',revoked:'취소됨'}[b.status]}</span></div>`).join(''):'<div class="empty">아직 기록한 책이 없습니다.</div>'}</section></div>`;
+     <section class="card"><h3>My Books <small>${W.books.length}권</small></h3>${W.books.length?W.books.slice().sort((a,b)=>b.created_at.localeCompare(a.created_at)).map(b=>`<div class="mi"><div class="t"><b>${esc(b.title)}</b><span>${fmtD(b.created_at)}</span></div><span class="pill ${b.status==='approved'?'ok':b.status==='requested'?'wait':'no'}">${{approved:'승인',requested:'확인 중',rejected:'다시 확인',revoked:'취소됨'}[b.status]}</span></div>`).join(''):'<div class="empty">아직 기록한 책이 없습니다.</div>'}</section></div>`;
   }else{
     const base=new Date();base.setDate(1);base.setMonth(base.getMonth()+UI.calM);const y=base.getFullYear(),mo=base.getMonth(),first=(base.getDay()+6)%7,dim=new Date(y,mo+1,0).getDate(),dx=dayXP();
     let cells='',sum=0,cnt=0;for(let i=0;i<first;i++)cells+='<span></span>';
@@ -1413,9 +1413,9 @@ function viewMap(){const Z=mapZones(),n=Z.length,rows=UI.map||[],me=W.me.id,by=Z
     <path d="${MAP_ISL}" fill="#EFE3C4" stroke="#C7B184" stroke-width="3"/><g clip-path="url(#mwIsl)">${tint}</g>
     <polyline points="${pts}" fill="none" stroke="#FFF8E7" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/><polyline points="${pts}" fill="none" stroke="#A8824E" stroke-width="2.5" stroke-dasharray="6 7" stroke-linecap="round" stroke-linejoin="round"/>
     ${lm}<g transform="translate(366,30)"><circle r="17" fill="#FFF8E7" stroke="#A8824E" stroke-width="2"/><path d="M0,-13 L4,0 L0,13 L-4,0Z" fill="#28314B"/><path d="M0,-13 L4,0 L-4,0Z" fill="#D9534F"/><text y="-19" text-anchor="middle" class="zk">N</text></g>${marks}${meMark}</svg>`;
-  return `<div class="stack"><div><h2 style="font-size:20px">MONSTER WORLD 맵</h2><p class="muted">레벨이 오르면 길을 따라 위로 올라갑니다.${mine?` 지금 <b>${esc(Z[mz].ko||Z[mz].name)}</b>에 있습니다.${nz?` 다음 지역까지 <b class="num">Lv.${nz.from}</b>입니다.`:''}`:''} 몬스터를 누르면 이름이 보입니다.</p></div>
+  return `<div class="stack"><div><h2 style="font-size:20px">World Map</h2><p class="muted">레벨이 오르면 길을 따라 위로 올라갑니다.${mine?` 지금 <b>${esc(Z[mz].ko||Z[mz].name)}</b>에 있습니다.${nz?` 다음 지역까지 <b class="num">Lv.${nz.from}</b>입니다.`:''}`:''} 몬스터를 누르면 이름이 보입니다.</p></div>
    <div class="card" style="padding:8px">${svg}</div>${W.me.role==='student'?caveEntry():''}
-   <section class="card"><h3>지역별 학생 <small>${rows.length}명</small></h3>${Z.map((z,i)=>({z,i})).reverse().map(({z,i})=>`<div class="mi"><div class="chip num" style="background:${ZC[i%5]}55">${i+1}</div><div class="t"><b>${esc(z.name)} <span class="tiny muted">${esc(z.ko||'')} · Lv.${z.from}+</span></b><span>${by[i].filter(r=>r.name!=null||r.student_id===me).map(r=>r.student_id===me?`<b>${esc(r.name)} Lv.${r.level}</b>`:`${esc(r.name)} Lv.${r.level}`).join(' · ')||(by[i].length?'이름 비공개':'아직 도착한 학생이 없습니다.')}</span></div><span class="pill gray">${by[i].length}명</span></div>`).join('')}</section></div>`}
+   <section class="card"><h3>Players by Area <small>${rows.length}명</small></h3>${Z.map((z,i)=>({z,i})).reverse().map(({z,i})=>`<div class="mi"><div class="chip num" style="background:${ZC[i%5]}55">${i+1}</div><div class="t"><b>${esc(z.name)} <span class="tiny muted">${esc(z.ko||'')} · Lv.${z.from}+</span></b><span>${by[i].filter(r=>r.name!=null||r.student_id===me).map(r=>r.student_id===me?`<b>${esc(r.name)} Lv.${r.level}</b>`:`${esc(r.name)} Lv.${r.level}`).join(' · ')||(by[i].length?'이름 비공개':'아직 도착한 학생이 없습니다.')}</span></div><span class="pill gray">${by[i].length}명</span></div>`).join('')}</section></div>`}
 const actRow=(k,l,x,sf,st,sn)=>`<tr data-k="${esc(k)}"><td><input class="inp al" maxlength="24" value="${esc(l)}" aria-label="활동 이름" placeholder="예: 발표 참여"></td><td class="r"><input class="inp ax num" type="number" min="-5000" max="5000" step="1" value="${x}" aria-label="XP" style="width:96px"></td><td><select class="inp ast" aria-label="스탯">${[['','없음'],...Object.entries(STAT).map(([v,[t]])=>[v,t])].map(([v,t])=>`<option value="${v}" ${(st||'')===v?'selected':''}>${t}</option>`).join('')}</select></td><td><select class="inp asn" aria-label="진화석">${[['','없음'],['evo','진화석'],['legend','전설석']].map(([v,t])=>`<option value="${v}" ${(sn||'')===v?'selected':''}>${t}</option>`).join('')}</select></td><td>${k==='reading'?'<span class="tiny muted">독서 탭</span>':`<input type="checkbox" class="as" aria-label="학생 요청" ${sf?'checked':''}>`}</td><td class="r">${k==='reading'?'':'<button type="button" class="btn sm d" data-act="actDel">삭제</button>'}</td></tr>`;
 function readActs(){const ax={},lb={},list=[],self=[],stats={},stones={};for(const tr of document.querySelectorAll('#actRows tr[data-k]')){const k=tr.dataset.k,l=tr.querySelector('.al').value.trim(),x=Number(tr.querySelector('.ax').value);
     if(!l)throw new Error('비어 있는 활동 이름이 있습니다. 이름을 넣거나 그 줄을 삭제해 주세요.');if(!Number.isInteger(x)||x<-5000||x>5000)throw new Error(`${l}: XP는 -5000~5000 사이 정수로 입력해 주세요.`);
@@ -1448,7 +1448,7 @@ const wkStart=()=>{const d=weekStart();d.setDate(d.getDate()+7*UI.wk);return d};
 async function loadWeekly(){try{UI.weekly=await api.weekly(ymd(wkStart()))||[]}catch(e){UI.weekly=[];toast(e.message,true)}}
 /* ================= 단어 배틀 (문제·채점·보상은 서버 mw_battle_* 가 처리) ================= */
 function caveEntry(){const pos=UI.caveMeta&&UI.caveMeta.pos;return `<button class="card cave-entry" data-act="caveOpen"><svg width="54" height="44" viewBox="0 0 54 44" aria-hidden="true"><path d="M2,42 Q6,8 27,4 Q48,8 52,42Z" fill="#6E5A44"/><path d="M14,42 Q16,18 27,16 Q38,18 40,42Z" fill="#1A1C2B"/><circle cx="23" cy="30" r="2" fill="#F4D58D"/><circle cx="31" cy="30" r="2" fill="#F4D58D"/></svg><span style="display:flex;flex-direction:column;gap:2px"><b>단어 동굴 입구</b><span>지나온 Unit 단어로 야생 몬스터와 배틀! 이기면 XP와 💠 진화석 조각</span></span><b style="margin-left:auto">들어가기 →</b></button>`}
-function viewCave(){const C=UI.cave;const back=`<div class="row" style="justify-content:space-between"><button class="btn" data-act="caveClose">← 지도로</button><h2 style="font-size:20px">⛏ 단어 동굴</h2></div>`;
+function viewCave(){const C=UI.cave;const back=`<div class="row" style="justify-content:space-between"><button class="btn" data-act="caveClose">← 지도로</button><h2 style="font-size:20px">⛏ Word Cave</h2></div>`;
   if(!C)return back+'<div class="empty">동굴을 여는 중…</div>';
   if(!C.pos)return back+'<div class="empty">선생님이 아직 단어장 위치를 정하지 않았어요. 선생님께 말씀드려 주세요.</div>';
   const pct=Math.round((C.shards%C.per)/C.per*100);
@@ -1715,10 +1715,10 @@ function roomFX(id,mini){const F=THEME_FX[id];if(!F)return '';let seed=7;const R
 
 const duelOn=()=>!!(W.set.duel&&W.set.duel.on&&W.set.home_visit!==false&&(W.set.map_name_mode||'nickname')!=='hidden');
 function duelCards(){if(!duelOn())return '';const L=W.duels||[],inc=L.filter(d=>d.role==='b'&&(d.status==='waiting'||(d.status==='b_playing'&&!d.my_done))),res=L.filter(d=>d.status==='done').slice(0,2);if(!inc.length&&!res.length)return '';
-  return `<section class="card stack"><h3>⚔️ 친구 대결</h3>${inc.map(d=>`<div class="mi"><div class="t"><b>${esc(d.other)}가 대결을 신청했어요!</b><span class="tiny muted">같은 단어 ${d.total}문제 · ${fmtD(d.expires_at)}까지</span></div><button class="btn sm p" data-act="duGo" data-id="${d.id}">대결하기</button></div>`).join('')}
+  return `<section class="card stack"><h3>⚔️ Friend Duel</h3>${inc.map(d=>`<div class="mi"><div class="t"><b>${esc(d.other)}가 대결을 신청했어요!</b><span class="tiny muted">같은 단어 ${d.total}문제 · ${fmtD(d.expires_at)}까지</span></div><button class="btn sm p" data-act="duGo" data-id="${d.id}">대결하기</button></div>`).join('')}
     ${res.map(d=>`<div class="mi"><div class="t"><b>${d.result==='win'?'🏆 승리':d.result==='draw'?'🤝 무승부':'💪 아쉬운 패배'} · vs ${esc(d.other)}</b><span class="tiny muted">${d.my_score} : ${d.other_score} · 맞힌 개수 ${d.my_correct} : ${d.other_correct}</span></div></div>`).join('')}</section>`}
 function duelList(){if(!duelOn())return '';const L=W.duels||[];if(!L.length)return '';const st=d=>d.status==='done'?(d.result==='win'?'🏆 승리':d.result==='draw'?'🤝 무승부':'💪 패배')+` ${d.my_score}:${d.other_score}`:d.status==='expired'?'시간이 지나 취소됨':d.role==='a'&&d.my_done?'친구를 기다리는 중':d.role==='b'&&!d.my_done?'내 차례!':'푸는 중';
-  return `<section class="card"><h3>⚔️ 내 대결 <small>최근 ${L.length}개</small></h3>${L.map(d=>`<div class="mi"><div class="t"><b>vs ${esc(d.other)}</b><span class="tiny muted">${st(d)}</span></div>${!d.my_done&&['a_playing','waiting','b_playing'].includes(d.status)&&!(d.role==='b'&&d.status==='a_playing')?`<button class="btn sm p" data-act="duGo" data-id="${d.id}">${d.role==='a'?'이어 풀기':'대결하기'}</button>`:''}</div>`).join('')}</section>`}
+  return `<section class="card"><h3>⚔️ My Duels <small>최근 ${L.length}개</small></h3>${L.map(d=>`<div class="mi"><div class="t"><b>vs ${esc(d.other)}</b><span class="tiny muted">${st(d)}</span></div>${!d.my_done&&['a_playing','waiting','b_playing'].includes(d.status)&&!(d.role==='b'&&d.status==='a_playing')?`<button class="btn sm p" data-act="duGo" data-id="${d.id}">${d.role==='a'?'이어 풀기':'대결하기'}</button>`:''}</div>`).join('')}</section>`}
 function viewDuel(){const D=UI.duel,fb=UI.duFb;if(!D)return '<div class="empty">대결을 준비하는 중…</div>';
   const head=`<section class="bt-top" style="gap:4px"><span class="tiny" style="letter-spacing:.14em;color:#E8A93A">FRIEND DUEL</span><b style="font-size:20px">⚔️ vs ${esc(D.other)}</b><span class="tiny">같은 ${D.total}문제 · 빠를수록 점수 UP${D.bonus?` · 내 몬스터 보너스 +${D.bonus}%`:''}</span>
     <div class="hpbar"><i style="width:${Math.round(((D.my_done?D.total:(D.n||1)-1))/D.total*100)}%;background:linear-gradient(90deg,#7FB3E8,#4C8DE0)"></i></div><span class="tiny num">${D.my_done?D.total:Math.max(0,(D.n||1)-1)} / ${D.total} · 내 점수 ${D.my_score||0}</span></section>`;
@@ -1759,30 +1759,30 @@ function viewDress(H,S){const m=myActive();if(!m)return '<div class="empty">먼�
   return hero+grid+sets+perks}
 function viewHouse(){const H=UI.home,S=UI.shop,v=['home','friends','visit','duel'].includes(UI.hv)?UI.hv:'home',mons=W.monsters.filter(m=>m.hatched).sort((x,y)=>(y.id===W.me.active_monster)-(x.id===W.me.active_monster)).slice(0,4);
   const tabOn=k=>v===k||(k==='home'&&(v==='edit'||v==='inv'));
-  const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px;flex-wrap:wrap">${[['home','🏠 내 방'],...(H&&H.visit?[['friends','👫 친구 집']]:[])].map(([k,l])=>`<button class="ck ${tabOn(k)?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div>
+  const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px;flex-wrap:wrap">${[['home','🏠 My Room'],...(H&&H.visit?[['friends','👫 Friends']]:[])].map(([k,l])=>`<button class="ck ${tabOn(k)?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div>
     <span class="row" style="gap:6px"><span class="coin pt" title="칭찬 포인트 · 상점에서 쓴 만큼 칭찬모아로 넘어가지 않아요">⭐ ${H?Math.max(0,H.points||0).toLocaleString():'…'}</span><span class="coin" title="코인 · 게임 안에서만 써요">🪙 ${H?H.coins.toLocaleString():'…'}</span></span></div>`;
   if(!H||!S)return `<div class="stack">${top}<div class="empty">불러오는 중…</div></div>`;
   const stkLine=o=>Object.entries(STICKERS).filter(([k])=>o&&o[k]).map(([k,[e]])=>`<span class="pill">${e} ${o[k]}</span>`).join(' ');
   if(v==='duel')return `<div class="stack">${viewDuel()}</div>`;
-  if(v==='friends'){const F=(UI.map||[]).filter(r=>r.vk);return `<div class="stack">${top}${duelList()}<section class="card"><h3>친구 집 둘러보기 <small>${F.length}명</small></h3>
+  if(v==='friends'){const F=(UI.map||[]).filter(r=>r.vk);return `<div class="stack">${top}${duelList()}<section class="card"><h3>Visit Friends <small>${F.length}명</small></h3>
       ${F.length?`<div class="stu">${F.map(r=>`<button class="st" data-act="visit" data-vk="${esc(r.vk)}">${r.species_id?monsterSVG(spOf(r.species_id),r.stage):eggSVG(null)}<span><b>${esc(r.name||'친구')}</b><span class="tiny muted">Lv.${r.level}</span><br><span class="tiny">🏠 집 구경하기 →</span></span></button>${duelOn()?`<button class="btn sm" data-act="duNew" data-vk="${esc(r.vk)}" style="margin:-6px 0 6px">⚔️ ${esc(r.name||'친구')}에게 대결 신청</button>`:''}`).join('')}</div>`:'<div class="empty">아직 놀러 갈 친구가 없어요.</div>'}</section></div>`}
   if(v==='visit'){const V=UI.visit;if(!V)return `<div class="stack">${top}<div class="empty">친구 집에 가는 중…</div></div>`;
     return `<div class="stack">${top}<div class="row" style="justify-content:space-between"><button class="btn" data-act="hTab" data-v="friends">← 친구 목록</button><h2 style="font-size:19px">🏠 ${esc(V.name)}의 집</h2></div>
       <section class="card" style="padding:10px">${roomHTML(roomOf(V),V.monsters,false)}</section>${V.power?`<p class="tiny" style="text-align:center">${tierBadge(V.power)}</p>`:''}
-      <section class="card stack"><h3>스티커 남기기 <small>친구마다 하루 1번</small></h3>
+      <section class="card stack"><h3>Leave a Sticker <small>친구마다 하루 1번</small></h3>
         ${V.sent_today?'<div class="fb ok">오늘 이 친구에게 스티커를 보냈어요. 내일 또 놀러 와요!</div>':`<div class="chips">${Object.entries(STICKERS).map(([k,[e,l]])=>`<button class="ck" data-act="stk" data-k="${k}">${e} ${l}</button>`).join('')}</div>`}
         <p class="tiny muted">이 집이 받은 스티커 ${stkLine(V.stickers)||'아직 없음'}</p></section>${duelOn()&&!V.mine?`<button class="btn p" data-act="duNew" data-vk="${esc(UI.visitKey)}">⚔️ ${esc(V.name)}에게 대결 신청</button>`:''}</div>`}
   if(v==='dress')return `<div class="stack">${top}${viewDress(H,S)}</div>`;
   if(v==='home'){const T=S.items.filter(i=>i.kind==='theme').sort((a,b)=>(!!a.unlock-!!b.unlock)||a.sort-b.sort),cur=H.theme||(!(H.layout||[]).length?'t_cozy':null),pts=Math.max(0,H.points||0);
     return `<div class="stack">${top}<section class="card" style="padding:8px">${roomHTML(roomOf(H),mons,false)}</section>
-    <section class="card stack"><h3>방 테마 <small>누르면 한 번에 바뀌어요</small></h3><div class="thg">${T.map(t=>{const own=(t.owned>0||t.price===0)&&!lockWhy(t,S),on=cur===t.id,off=t.season&&t.season!==S.season&&!own;
+    <section class="card stack"><h3>Room Themes <small>누르면 한 번에 바뀌어요</small></h3><div class="thg">${T.map(t=>{const own=(t.owned>0||t.price===0)&&!lockWhy(t,S),on=cur===t.id,off=t.season&&t.season!==S.season&&!own;
       const why=lockWhy(t,S);
       return `<div class="th ${on?'on':''} ${why?'lk':''} r-${t.rarity}">${roomHTML({...t.preset,theme:null,fx:t.id,mini:true},[],false)}${why?`<span class="thlock">🔒 ${esc(why)}</span>`:''}<b>${esc(t.name)}</b><span class="row" style="gap:4px;justify-content:center"><span class="pill ${(RARITY[t.rarity]||RARITY.common)[1]}">${(RARITY[t.rarity]||RARITY.common)[0]}</span>${t.season?`<span class="pill">${SEASON_KO[t.season].slice(0,SEASON_KO[t.season].indexOf('('))}</span>`:''}</span>
         ${on?'<span class="pill ok">지금 내 방</span>':why?`<span class="pill legend">${t.unlock&&t.unlock.t==='stage'?'🏆 진화 보상':'🔒 학습 보상'}</span>`:own?`<button class="btn sm p" data-act="hTheme" data-id="${t.id}">이 방으로</button>`:off?`<span class="pill gray">🗓 ${SEASON_KO[t.season]} 한정</span>`:`<div class="buy2"><button class="btn sm p" data-act="hBuy" data-id="${t.id}" data-pay="point" ${Math.max(0,H.points||0)<t.price*PT_RATE?'disabled':''}>⭐ ${(t.price*PT_RATE).toLocaleString()}</button><button class="btn sm cb" data-act="hBuy" data-id="${t.id}" data-pay="coin" ${H.coins<t.price?'disabled':''}>🪙 ${t.price}</button></div>`}</div>`}).join('')}</div>
       <p class="tiny muted">🏆 하늘정원은 Elite, 우주 관측소는 Legend로 진화하면 무료로 열려요. 계절 테마는 그 계절에만 살 수 있어요.</p></section>
-    <section class="card ptbox"><div><b>⭐ 칭찬 포인트 ${pts.toLocaleString()}</b><span class="tiny muted">선생님이 승인한 공부만큼 쌓여요. 방 테마를 사면 그만큼은 칭찬모아로 넘어가지 않아요.</span></div>
-      <button class="ck ${S.point_save?'on':''}" data-act="ptSave" data-v="${S.point_save?0:1}">🐷 모으기 ${S.point_save?'켜짐':'꺼짐'}</button></section>
-    ${H.visit?`<section class="card"><h3>오늘 받은 스티커 <small>${(H.today||[]).length}개</small></h3>${(H.today||[]).length?`<div class="chips">${H.today.map(t=>`<span class="pill">${STICKERS[t.kind][0]} ${esc(t.name)} · ${STICKERS[t.kind][1]}</span>`).join('')}</div>`:'<p class="tiny muted">아직 없어요. 친구 집에 놀러 가서 먼저 스티커를 남겨 보세요!</p>'}${stkLine(H.stickers)?`<p class="tiny muted" style="margin-top:8px">지금까지 받은 스티커 ${stkLine(H.stickers)}</p>`:''}</section>`:''}
+    <section class="card ptbox"><div><b>⭐ Praise Points ${pts.toLocaleString()}</b><span class="tiny muted">선생님이 승인한 공부만큼 쌓여요. 방 테마를 사면 그만큼은 칭찬모아로 넘어가지 않아요.</span></div>
+      <button class="ck ${S.point_save?'on':''}" data-act="ptSave" data-v="${S.point_save?0:1}">🐷 Save ${S.point_save?'ON':'OFF'}</button></section>
+    ${H.visit?`<section class="card"><h3>Today's Stickers <small>${(H.today||[]).length}개</small></h3>${(H.today||[]).length?`<div class="chips">${H.today.map(t=>`<span class="pill">${STICKERS[t.kind][0]} ${esc(t.name)} · ${STICKERS[t.kind][1]}</span>`).join('')}</div>`:'<p class="tiny muted">아직 없어요. 친구 집에 놀러 가서 먼저 스티커를 남겨 보세요!</p>'}${stkLine(H.stickers)?`<p class="tiny muted" style="margin-top:8px">지금까지 받은 스티커 ${stkLine(H.stickers)}</p>`:''}</section>`:''}
     <p class="tiny muted">⭐ 칭찬 포인트는 선생님이 승인한 공부만큼 쌓여요. 상점에서 쓰면 그만큼은 칭찬모아로 넘어가지 않아요. 🪙 코인은 배틀·진화 등으로 모으는 게임 화폐예요.</p></div>`}
   const inv=H.inventory||{};
   if(v==='edit'){const E=UI.hEdit,used={};for(const e of E.layout)used[e.i]=(used[e.i]||0)+1;const sel=E.sel!=null?E.layout[E.sel]:null,si=sel&&itemOf(sel.i);
@@ -1816,7 +1816,7 @@ function viewHouse(){const H=UI.home,S=UI.shop,v=['home','friends','visit','duel
     return `<div class="sitem ${own?'own':''} r-${i.rarity||'common'}${i.kind==='theme'?' wide':''}">${pv}<b>${esc(i.name)}</b>${gr&&i.set_id?`<span class="tiny gpw">${SETS[i.set_id]} 세트</span>`:''}<span class="row" style="gap:4px;justify-content:center"><span class="pill ${R[1]}">${R[0]}</span>${i.season?`<span class="pill">${SEASON_KO[i.season].slice(0,SEASON_KO[i.season].indexOf('('))}</span>`:''}</span>${i.kind==='furniture'&&own?`<span class="tiny muted">${i.owned}개 가짐</span>`:''}${btn}</div>`}).join('');
   return `<div class="stack">${top}
     <section class="card ptbox"><div><b>⭐ 칭찬 포인트 ${pts.toLocaleString()}</b><span class="tiny muted">선생님이 승인한 공부만큼 쌓여요. 여기서 쓰면 그만큼은 칭찬모아로 넘어가지 않아요.</span></div>
-      <button class="ck ${S.point_save?'on':''}" data-act="ptSave" data-v="${S.point_save?0:1}">🐷 모으기 ${S.point_save?'켜짐':'꺼짐'}</button></section>
+      <button class="ck ${S.point_save?'on':''}" data-act="ptSave" data-v="${S.point_save?0:1}">🐷 Save ${S.point_save?'ON':'OFF'}</button></section>
     ${S.point_save?'<p class="tiny" style="margin:-4px 2px 0">🐷 모으는 중이에요. 이번 주 포인트를 칭찬모아로 보내지 않고 모아 둡니다. 비싼 가구를 살 때 켜 두세요.</p>':''}
     <div class="row" style="gap:6px;flex-wrap:wrap">${[['gear','⚔️ 장비'],['theme','🏠 방 테마'],['furniture','가구'],['deco','벽지·바닥'],['seasonal','시즌 소품']].map(([k,l])=>`<button class="ck ${cat===k?'on':''}" data-act="sCat" data-v="${k}">${l}${k==='seasonal'?` · 지금 ${SEASON_KO[S.season].slice(0,SEASON_KO[S.season].indexOf('('))}`:''}</button>`).join('')}</div>
     ${cat==='gear'?`<div class="row" style="gap:6px;flex-wrap:wrap"><button class="ck ${!UI.gSlot?'on':''}" data-act="gSlotF" data-v="">전체</button>${Object.entries(SLOT).map(([k,[l,e]])=>`<button class="ck ${UI.gSlot===k?'on':''}" data-act="gSlotF" data-v="${k}">${e} ${l}</button>`).join('')}</div>`:''}
@@ -1974,7 +1974,7 @@ const A={
      <div class="card"><div class="mi"><div class="t"><b>${esc(m.nickname||sp.name)}</b><span style="display:block">${esc(formName(sp,m.stage))}${formOf(sp,m.stage).name_ko?' · '+esc(formOf(sp,m.stage).name_ko):''}</span><span style="display:block">${esc(sp.animal)} · ${esc(sp.concept)}</span></div>${elTag(sp.element)}<span class="pill ${(RAR[sp.rarity]||RAR.common)[1]}">${(RAR[sp.rarity]||RAR.common)[0]}</span></div>
       ${sp.description||formOf(sp,m.stage).description?`<p class="tiny muted" style="margin:0 0 10px;line-height:1.6">${esc(sp.description||'')} ${esc(formOf(sp,m.stage).description||'')}</p>`:''}
       <div class="mi"><div class="t"><span>현재 레벨</span></div><b class="num">Lv.${m.level}</b></div><div class="mi"><div class="t"><span>누적 XP</span></div><b class="num">${m.xp}</b></div><div class="mi"><div class="t"><span>획득 날짜</span></div><b class="num">${ymd(m.hatched_at||m.obtained_at)}</b></div><div class="mi"><div class="t"><span>획득 경로</span></div><b>${esc(m.source)}</b></div></div>
-     <div class="card"><h3>최근 성장 기록</h3>${L.length?L.map(l=>`<div class="mi"><div class="t"><b>${esc(ACT[l.reason]?.[1]||l.reason)}</b><span>${fmtD(l.created_at)}</span></div><span class="xpv">${l.amount>0?'+':''}${l.amount}</span></div>`).join(''):'<div class="empty">아직 기록이 없습니다.</div>'}</div>
+     <div class="card"><h3>Recent Growth</h3>${L.length?L.map(l=>`<div class="mi"><div class="t"><b>${esc(ACT[l.reason]?.[1]||l.reason)}</b><span>${fmtD(l.created_at)}</span></div><span class="xpv">${l.amount>0?'+':''}${l.amount}</span></div>`).join(''):'<div class="empty">아직 기록이 없습니다.</div>'}</div>
      ${evoOpts(m).length?`<button class="btn p" data-act="evoOpen" data-id="${m.id}">${STN[m.stage+1]}로 진화시키기</button>`:''}${m.id===W.me.active_monster?'<p class="tiny muted" style="text-align:center">지금 함께 성장하는 대표 몬스터입니다.</p>':`<button class="btn p" data-act="setActive" data-id="${m.id}">대표 몬스터로 지정 — 앞으로 받는 XP가 이 몬스터에게 쌓입니다</button>`}</div>`)},
   async setActive(d){closeModal();if(await call('set_active',{monster:d.id},'대표 몬스터를 바꿨습니다.')){UI.tab='home';render()}},
   // teacher
