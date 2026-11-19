@@ -10,6 +10,7 @@
 --        방 꾸미기 아이템 54종(시즌 소품 10 추가) · 희귀도 · 그림 · 시즌 판매 · 학습 성과 해금 · 벽걸이/좌우 뒤집기 · 아이템 관리(본사 원장)
 -- v2.23: 몬스터 장비 꾸미기(머리·몸·손·등 4칸, 전투력·세트 효과·전설 장비는 실력으로만), 전투력 등급(브론즈~레전드), 강적 도전(실버부터, 문제 2배), 방 테마 8종(한 번에 바꾸기)
 -- v2.24: 장비 29종 3D 그림(assets/equipment)과 그림에 맞춘 이름, 몬스터별 장비 위치·크기·회전 맞춤(mw_gear_fit, 본사 원장)
+-- v2.28: 방 테마 30종 추가(베이커리·한옥·해적선·로켓·수정 동굴 등). 그림이 있는 테마만 학생 상점에 보임
 -- v2.25: 몬스터는 진화로만 성장(장비 전투력 끔, 장비·가구 데이터는 그대로 둠), 방 테마 12종(진화하면 열리는 테마 포함), 가구 자유 꾸미기는 화면에서 뺌
 -- v2.19: 친구 대결(같은 10문제를 각자 풀고 점수 비교, 서버가 시간 측정, 코인만, 하루 3번, 48시간 지나면 취소, 처음엔 꺼 둠)
 -- v2.18: 친구 집 방문 + 스티커(정해진 6종, 친구마다 하루 1개, 자유 글쓰기 없음). 방문은 임시 열쇠(visit_key)로만, 이름은 지도 표시 방식 그대로
@@ -481,6 +482,76 @@ update mw_shop_items i set preset = v.preset, rarity = case when i.meta_v < 2 th
    ('t_sky','epic',null,'{"wall": "wall_sky", "floor": "floor_cloud", "layout": [{"i": "window", "x": 2, "y": -1}, {"i": "clock", "x": 5, "y": -1}, {"i": "plant", "x": 0, "y": 0}, {"i": "s_cherry", "x": 1, "y": 0}, {"i": "plant", "x": 2, "y": 0}, {"i": "telescope", "x": 3, "y": 0}, {"i": "s_cherry", "x": 5, "y": 0}, {"i": "plant", "x": 6, "y": 0}, {"i": "s_cherry", "x": 7, "y": 0}, {"i": "beanbag", "x": 0, "y": 2}, {"i": "rug", "x": 3, "y": 2}, {"i": "petbed", "x": 7, "y": 2}, {"i": "plant", "x": 0, "y": 4}, {"i": "cactus", "x": 7, "y": 4}]}'::jsonb),
    ('t_space','legend',null,'{"wall": "wall_star", "floor": "floor_cloud", "layout": [{"i": "poster", "x": 0, "y": -1}, {"i": "window", "x": 2, "y": -1}, {"i": "poster", "x": 5, "y": -1}, {"i": "clock", "x": 7, "y": -1}, {"i": "telescope", "x": 0, "y": 0}, {"i": "globe", "x": 1, "y": 0}, {"i": "telescope", "x": 2, "y": 0}, {"i": "trophy", "x": 3, "y": 0}, {"i": "trophy", "x": 4, "y": 0}, {"i": "telescope", "x": 5, "y": 0}, {"i": "globe", "x": 6, "y": 0}, {"i": "telescope", "x": 7, "y": 0}, {"i": "globe", "x": 0, "y": 2}, {"i": "rug", "x": 3, "y": 2}, {"i": "lamp", "x": 7, "y": 2}, {"i": "trophy", "x": 0, "y": 4}, {"i": "lamp", "x": 7, "y": 4}]}'::jsonb)
   ) as v(id, rarity, season, preset)
+ where i.id = v.id;
+-- v2.28: 방 테마 30종 추가(그림이 있는 테마만 학생 상점에 보임 — 그림은 assets/themes 또는 아이템 관리에서 올림). 원장이 고친 테마는 그대로
+insert into mw_shop_items(id, kind, name, price, min_level, sort) values
+ ('t_bakery','theme','달콤 베이커리',350,1,200),
+ ('t_candy','theme','사탕 과자집',450,1,201),
+ ('t_camping','theme','별빛 캠핑',450,1,202),
+ ('t_greenhouse','theme','햇살 온실',350,1,203),
+ ('t_art','theme','알록달록 미술실',350,1,204),
+ ('t_science','theme','꼬마 과학 실험실',500,1,205),
+ ('t_dino','theme','공룡 화석 박물관',650,1,206),
+ ('t_pirate','theme','해적선 선장실',650,1,207),
+ ('t_castle','theme','동화 속 성',650,1,208),
+ ('t_treehouse','theme','나무 위 오두막',450,1,209),
+ ('t_cafe','theme','아늑한 카페',350,1,210),
+ ('t_hanok','theme','한옥 사랑방',500,1,211),
+ ('t_jungle','theme','정글 탐험 캠프',450,1,212),
+ ('t_igloo','theme','북극 이글루',450,1,213),
+ ('t_train','theme','꼬마 기차 객실',450,1,214),
+ ('t_rocket','theme','로켓 조종실',650,1,215),
+ ('t_robot','theme','로봇 공방',600,1,216),
+ ('t_gym','theme','신나는 체육관',350,1,217),
+ ('t_arcade','theme','레트로 오락실',500,1,218),
+ ('t_potion','theme','마법 물약 연구실',650,1,219),
+ ('t_fairy','theme','요정 버섯 마을',450,1,220),
+ ('t_moon','theme','달토끼 방',600,1,221),
+ ('t_farm','theme','농장 헛간',350,1,222),
+ ('t_pet','theme','아기 동물 돌봄방',400,1,223),
+ ('t_stage','theme','꿈의 무대 연습실',500,1,224),
+ ('t_butterfly','theme','나비 꽃정원',400,1,225),
+ ('t_rainy','theme','비 오는 날 개구리방',400,1,226),
+ ('t_chuseok','theme','추석 보름달',400,1,227),
+ ('t_crystal','theme','수정 동굴',0,1,228),
+ ('t_aurora','theme','오로라 별장',0,1,229)
+on conflict (id) do nothing;
+update mw_shop_items i set preset = v.preset,
+       rarity = case when i.meta_v < 2 then v.rarity else i.rarity end,
+       season = case when i.meta_v < 2 then v.season else i.season end,
+       unlock = case when i.meta_v < 2 then v.u else i.unlock end
+  from (values
+   ('t_bakery','common',null,'{"wall": "wall_cream", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_candy','rare',null,'{"wall": "wall_lilac", "floor": "floor_carpet", "layout": []}'::jsonb,null::jsonb),
+   ('t_camping','rare',null,'{"wall": "wall_mint", "floor": "floor_grass", "layout": []}'::jsonb,null::jsonb),
+   ('t_greenhouse','common',null,'{"wall": "wall_mint", "floor": "floor_tile", "layout": []}'::jsonb,null::jsonb),
+   ('t_art','common',null,'{"wall": "wall_cream", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_science','rare',null,'{"wall": "wall_sky", "floor": "floor_tile", "layout": []}'::jsonb,null::jsonb),
+   ('t_dino','epic',null,'{"wall": "wall_stripe", "floor": "floor_marble", "layout": []}'::jsonb,null::jsonb),
+   ('t_pirate','epic',null,'{"wall": "wall_stripe", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_castle','epic',null,'{"wall": "wall_lilac", "floor": "floor_marble", "layout": []}'::jsonb,null::jsonb),
+   ('t_treehouse','rare',null,'{"wall": "wall_mint", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_cafe','common',null,'{"wall": "wall_cream", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_hanok','rare',null,'{"wall": "wall_cream", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_jungle','rare',null,'{"wall": "wall_mint", "floor": "floor_grass", "layout": []}'::jsonb,null::jsonb),
+   ('t_igloo','rare',null,'{"wall": "wall_sky", "floor": "floor_cloud", "layout": []}'::jsonb,null::jsonb),
+   ('t_train','rare',null,'{"wall": "wall_stripe", "floor": "floor_carpet", "layout": []}'::jsonb,null::jsonb),
+   ('t_rocket','epic',null,'{"wall": "wall_star", "floor": "floor_tile", "layout": []}'::jsonb,null::jsonb),
+   ('t_robot','epic',null,'{"wall": "wall_sky", "floor": "floor_tile", "layout": []}'::jsonb,null::jsonb),
+   ('t_gym','common',null,'{"wall": "wall_sky", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_arcade','rare',null,'{"wall": "wall_star", "floor": "floor_carpet", "layout": []}'::jsonb,null::jsonb),
+   ('t_potion','epic',null,'{"wall": "wall_lilac", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_fairy','rare',null,'{"wall": "wall_mint", "floor": "floor_grass", "layout": []}'::jsonb,null::jsonb),
+   ('t_moon','epic',null,'{"wall": "wall_star", "floor": "floor_cloud", "layout": []}'::jsonb,null::jsonb),
+   ('t_farm','common',null,'{"wall": "wall_cream", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_pet','common',null,'{"wall": "wall_cream", "floor": "floor_carpet", "layout": []}'::jsonb,null::jsonb),
+   ('t_stage','rare',null,'{"wall": "wall_lilac", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_butterfly','rare','spring','{"wall": "wall_mint", "floor": "floor_grass", "layout": []}'::jsonb,null::jsonb),
+   ('t_rainy','rare','summer','{"wall": "wall_sky", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_chuseok','rare','autumn','{"wall": "wall_cream", "floor": "floor_wood", "layout": []}'::jsonb,null::jsonb),
+   ('t_crystal','legend',null,'{"wall": "wall_star", "floor": "floor_marble", "layout": []}'::jsonb,'{"t": "books", "v": 15}'::jsonb),
+   ('t_aurora','legend',null,'{"wall": "wall_star", "floor": "floor_cloud", "layout": []}'::jsonb,'{"t": "books", "v": 30}'::jsonb)
+  ) as v(id, rarity, season, preset, u)
  where i.id = v.id;
 -- v2.22: 아이템 기본 정보(원장이 고친 아이템은 건드리지 않음)
 update mw_shop_items i set rarity = v.rarity, season = v.season, place = v.place, w = v.w, unlock = v.unlock, meta_v = 1

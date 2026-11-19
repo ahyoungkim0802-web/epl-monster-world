@@ -27,3 +27,4 @@
 - 화면 문구는 한국어, 과장 없는 차분한 톤.
 
 - 방 테마 그림: assets/themes/<id>.webp(1448×1086, 4:3)·카드용 assets/themes/thumb/<id>.webp(480). index.html THEME_ART 에 ID를 적으면 기본 그림으로 쓰임. 원장이 아이템 관리에서 올린 image_url 이 있으면 그것이 우선. t_star·t_space 는 그림 없음(칸 배치 방). 그림 방은 몬스터가 앞쪽 러그 영역(RM_ART)만 걸어 다니고, 그림 위 파티클 효과는 끔.
+- v2.28 방 테마 30종 추가(THEME_NEW, schema v2.28). THEME_NEW_ID 테마는 그림(THEME_ART 또는 image_url)이 있을 때만 학생 상점에 보임. 프롬프트: ~/Downloads/MONSTER WORLD 새 방 테마 30종 프롬프트.txt
