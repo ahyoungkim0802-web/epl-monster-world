@@ -8,6 +8,7 @@
 -- v2.21: 상점에서 XP로도 사기. 받은 XP만큼 '쓸 수 있는 XP'가 따로 쌓이고, 써도 레벨·진화·칭찬모아 정산은 그대로(가격 = 코인 × 10)
 -- v2.22: 칭찬 포인트(⭐) — 주간 정산과 같은 기준으로 쌓이고, 상점에서 쓴 만큼 칭찬모아로 넘어가지 않음. 입력 완료 = 보냄 기록. 🐷 모으기. XP 구매 없앰.
 --        방 꾸미기 아이템 54종(시즌 소품 10 추가) · 희귀도 · 그림 · 시즌 판매 · 학습 성과 해금 · 벽걸이/좌우 뒤집기 · 아이템 관리(본사 원장)
+-- v2.23: 몬스터 장비 꾸미기(머리·몸·손·등 4칸, 전투력·세트 효과·전설 장비는 실력으로만), 전투력 등급(브론즈~레전드), 강적 도전(실버부터, 문제 2배), 방 테마 8종(한 번에 바꾸기)
 -- v2.19: 친구 대결(같은 10문제를 각자 풀고 점수 비교, 서버가 시간 측정, 코인만, 하루 3번, 48시간 지나면 취소, 처음엔 꺼 둠)
 -- v2.18: 친구 집 방문 + 스티커(정해진 6종, 친구마다 하루 1개, 자유 글쓰기 없음). 방문은 임시 열쇠(visit_key)로만, 이름은 지도 표시 방식 그대로
 -- v2.17: 코인·상점·내 집(가구·벽지·바닥·몬스터 액세서리). 활동 승인·배틀 승리·연속 기록·진화로 코인, 반려·취소 시 회수
@@ -243,6 +244,8 @@ create table if not exists mw_battles (
   created_at timestamptz not null default now(),
   finished_at timestamptz
 );
+alter table mw_battles drop constraint if exists mw_battles_kind_check;
+alter table mw_battles add constraint mw_battles_kind_check check (kind in ('unit','gate','hard'));   -- v2.23 hard = 강적 도전
 alter table mw_battles add column if not exists power int not null default 1;     -- v2.16: 정답 1번의 공격력(시작할 때 내 몬스터로 계산)
 alter table mw_battles add column if not exists crit numeric not null default 0;   -- 치명타 확률(0~1)
 create index if not exists mw_battles_student on mw_battles(student_id, day);
@@ -294,7 +297,12 @@ create table if not exists mw_shop_items (          -- 상점 목록(모든 학�
 );
 -- v2.22: 아이템 정보(희귀도·시즌·그림·해금 조건·놓는 곳·차지하는 칸). meta_v 2 = 도감처럼 원장이 고친 아이템(다시 실행해도 덮어쓰지 않음)
 alter table mw_shop_items drop constraint if exists mw_shop_items_kind_check;
-alter table mw_shop_items add constraint mw_shop_items_kind_check check (kind in ('furniture','wall','floor','acc','seasonal'));
+alter table mw_shop_items add constraint mw_shop_items_kind_check check (kind in ('furniture','wall','floor','acc','seasonal','gear','theme'));
+alter table mw_shop_items add column if not exists slot text;          -- v2.23 장비 칸: head·body·hand·back
+alter table mw_shop_items add column if not exists power int not null default 0;
+alter table mw_shop_items add column if not exists set_id text;
+alter table mw_shop_items add column if not exists grant_key text;     -- 전설 장비: 살 수 없고 이 조건을 이루면 받음(nelt·gate·streak·legend_evo)
+alter table mw_shop_items add column if not exists preset jsonb;       -- 방 테마: {"wall","floor","layout"}
 alter table mw_shop_items add column if not exists rarity text not null default 'common';
 alter table mw_shop_items add column if not exists season text;
 alter table mw_shop_items add column if not exists image_url text not null default '';
@@ -339,14 +347,14 @@ insert into mw_shop_items(id, kind, name, price, min_level, sort) values
  ('floor_carpet','floor','카펫 바닥',80,1,33),
  ('floor_marble','floor','대리석 바닥',150,10,34),
  ('floor_cloud','floor','구름 바닥',200,20,35),
- ('acc_hat','acc','모자',80,1,36),
- ('acc_ribbon','acc','리본',60,1,37),
- ('acc_glasses','acc','안경',70,1,38),
- ('acc_scarf','acc','목도리',70,1,39),
- ('acc_headphones','acc','헤드폰',120,1,40),
- ('acc_flower','acc','꽃',50,1,41),
- ('acc_star','acc','별 배지',200,10,42),
- ('acc_crown','acc','왕관',300,20,43)
+ ('acc_hat','gear','모자',80,1,36),
+ ('acc_ribbon','gear','리본',60,1,37),
+ ('acc_glasses','gear','안경',70,1,38),
+ ('acc_scarf','gear','목도리',70,1,39),
+ ('acc_headphones','gear','헤드폰',120,1,40),
+ ('acc_flower','gear','꽃',50,1,41),
+ ('acc_star','gear','별 배지',200,10,42),
+ ('acc_crown','gear','왕관',300,20,43)
 on conflict (id) do update set kind = excluded.kind, name = excluded.name, price = excluded.price, min_level = excluded.min_level, sort = excluded.sort
   where mw_shop_items.meta_v < 2;
 -- v2.22: 시즌 소품 10종
@@ -362,6 +370,87 @@ insert into mw_shop_items(id, kind, name, price, min_level, sort) values
  ('s_snowman','seasonal','눈사람',150,1,52),
  ('s_gift','seasonal','선물 상자',100,1,53)
 on conflict (id) do nothing;
+-- v2.23: 장비 21종 + 방 테마 8종
+insert into mw_shop_items(id, kind, name, price, min_level, sort) values
+ ('g_wizhat','gear','마법사 모자',220,1,54),
+ ('g_helmet','gear','기사 투구',220,1,55),
+ ('g_rainbow','gear','무지개 왕관',0,1,56),
+ ('g_robe','gear','별빛 로브',240,1,57),
+ ('g_armor','gear','기사 갑옷',240,1,58),
+ ('g_vest','gear','탐험가 조끼',140,1,59),
+ ('g_jacket','gear','반짝이 재킷',140,1,60),
+ ('g_emblem','gear','용사의 문장',0,1,61),
+ ('g_wand','gear','별 지팡이',200,1,62),
+ ('g_sword','gear','나무 검',200,1,63),
+ ('g_lens','gear','돋보기',120,1,64),
+ ('g_mic','gear','반짝 마이크',120,1,65),
+ ('g_book','gear','영어책',80,1,66),
+ ('g_lightbook','gear','빛의 책',0,1,67),
+ ('g_cape_p','gear','보라 망토',220,1,68),
+ ('g_cape_r','gear','빨간 망토',220,1,69),
+ ('g_rocket','gear','로켓 배낭',140,1,70),
+ ('g_fairy','gear','요정 날개',160,1,71),
+ ('g_angel','gear','천사 날개',160,1,72),
+ ('g_dragon','gear','드래곤 날개',320,1,73),
+ ('g_goldwings','gear','황금 날개',0,1,74),
+ ('t_cozy','theme','포근한 침실',0,1,75),
+ ('t_star','theme','별밤 천문대',450,1,76),
+ ('t_forest','theme','숲속 오두막',450,1,77),
+ ('t_music','theme','반짝 음악실',600,1,78),
+ ('t_spring','theme','벚꽃 피크닉',400,1,79),
+ ('t_summer','theme','바닷가 방',400,1,80),
+ ('t_autumn','theme','단풍 할로윈',400,1,81),
+ ('t_winter','theme','눈꽃 산장',450,1,82)
+on conflict (id) do nothing;
+-- 장비 칸·전투력·세트·획득 조건(원장이 고칠 수 없는 항목이라 늘 덮어씀). 희귀도는 처음 한 번만
+update mw_shop_items i set slot = v.slot, power = v.power, set_id = v.set_id, grant_key = v.grant_key,
+       rarity = case when i.meta_v < 2 then v.rarity else i.rarity end
+  from (values
+   ('acc_hat','head','common',3,'explorer',null),
+   ('acc_ribbon','head','common',3,null,null),
+   ('acc_glasses','head','common',3,'scholar',null),
+   ('acc_headphones','head','rare',6,'star',null),
+   ('acc_flower','head','common',3,null,null),
+   ('acc_crown','head','epic',10,null,null),
+   ('g_wizhat','head','epic',10,'wizard',null),
+   ('g_helmet','head','epic',10,'knight',null),
+   ('g_rainbow','head','legend',20,'legend','legend_evo'),
+   ('acc_scarf','body','common',3,'scholar',null),
+   ('acc_star','body','rare',6,null,null),
+   ('g_robe','body','epic',10,'wizard',null),
+   ('g_armor','body','epic',10,'knight',null),
+   ('g_vest','body','rare',6,'explorer',null),
+   ('g_jacket','body','rare',6,'star',null),
+   ('g_emblem','body','legend',20,'legend','streak'),
+   ('g_wand','hand','epic',10,'wizard',null),
+   ('g_sword','hand','epic',10,'knight',null),
+   ('g_lens','hand','rare',6,'explorer',null),
+   ('g_mic','hand','rare',6,'star',null),
+   ('g_book','hand','common',3,'scholar',null),
+   ('g_lightbook','hand','legend',20,'legend','gate'),
+   ('g_cape_p','back','epic',10,'wizard',null),
+   ('g_cape_r','back','epic',10,'knight',null),
+   ('g_rocket','back','rare',6,'explorer',null),
+   ('g_fairy','back','rare',6,'star',null),
+   ('g_angel','back','rare',6,'scholar',null),
+   ('g_dragon','back','epic',12,null,null),
+   ('g_goldwings','back','legend',20,'legend','nelt')
+  ) as v(id, slot, rarity, power, set_id, grant_key)
+ where i.id = v.id;
+update mw_shop_items set kind = 'gear' where kind = 'acc';   -- 예전 액세서리는 모두 머리·몸 장비로
+update mw_shop_items i set preset = v.preset, rarity = case when i.meta_v < 2 then v.rarity else i.rarity end,
+       season = case when i.meta_v < 2 then v.season else i.season end
+  from (values
+   ('t_cozy','common',null,'{"wall": "wall_cream", "floor": "floor_wood", "layout": [{"i": "window", "x": 3, "y": -1}, {"i": "clock", "x": 6, "y": -1}, {"i": "drawers", "x": 0, "y": 0}, {"i": "bed", "x": 5, "y": 0}, {"i": "lamp", "x": 7, "y": 2}, {"i": "rug", "x": 3, "y": 2}, {"i": "plant", "x": 0, "y": 3}, {"i": "petbed", "x": 6, "y": 4}]}'::jsonb),
+   ('t_star','rare',null,'{"wall": "wall_star", "floor": "floor_marble", "layout": [{"i": "poster", "x": 1, "y": -1}, {"i": "window", "x": 4, "y": -1}, {"i": "bookshelf", "x": 0, "y": 0}, {"i": "telescope", "x": 2, "y": 1}, {"i": "globe", "x": 6, "y": 1}, {"i": "lamp", "x": 7, "y": 0}, {"i": "rug", "x": 3, "y": 3}, {"i": "beanbag", "x": 5, "y": 4}]}'::jsonb),
+   ('t_forest','rare',null,'{"wall": "wall_mint", "floor": "floor_grass", "layout": [{"i": "pennant", "x": 1, "y": -1}, {"i": "clock", "x": 6, "y": -1}, {"i": "fireplace", "x": 3, "y": 0}, {"i": "plant", "x": 0, "y": 1}, {"i": "cactus", "x": 7, "y": 1}, {"i": "rug", "x": 3, "y": 2}, {"i": "chair", "x": 2, "y": 3}, {"i": "petbed", "x": 5, "y": 4}]}'::jsonb),
+   ('t_music','epic',null,'{"wall": "wall_lilac", "floor": "floor_carpet", "layout": [{"i": "pennant", "x": 2, "y": -1}, {"i": "poster", "x": 5, "y": -1}, {"i": "piano", "x": 0, "y": 0}, {"i": "tv", "x": 6, "y": 0}, {"i": "guitar", "x": 3, "y": 1}, {"i": "lamp", "x": 7, "y": 2}, {"i": "sofa", "x": 4, "y": 3}, {"i": "beanbag", "x": 0, "y": 4}]}'::jsonb),
+   ('t_spring','rare','spring','{"wall": "wall_mint", "floor": "floor_grass", "layout": [{"i": "window", "x": 3, "y": -1}, {"i": "s_cherry", "x": 0, "y": 0}, {"i": "plant", "x": 7, "y": 0}, {"i": "s_picnic", "x": 3, "y": 3}, {"i": "beanbag", "x": 6, "y": 4}, {"i": "petbed", "x": 0, "y": 4}]}'::jsonb),
+   ('t_summer','rare','summer','{"wall": "wall_sky", "floor": "floor_tile", "layout": [{"i": "window", "x": 3, "y": -1}, {"i": "aquarium", "x": 0, "y": 0}, {"i": "s_fan", "x": 7, "y": 1}, {"i": "s_melon", "x": 4, "y": 3}, {"i": "s_float", "x": 1, "y": 4}, {"i": "beanbag", "x": 6, "y": 4}]}'::jsonb),
+   ('t_autumn','rare','autumn','{"wall": "wall_stripe", "floor": "floor_wood", "layout": [{"i": "window", "x": 3, "y": -1}, {"i": "clock", "x": 6, "y": -1}, {"i": "s_maple", "x": 0, "y": 0}, {"i": "bed", "x": 5, "y": 0}, {"i": "rug", "x": 3, "y": 2}, {"i": "lamp", "x": 7, "y": 2}, {"i": "s_pumpkin", "x": 2, "y": 4}]}'::jsonb),
+   ('t_winter','epic','winter','{"wall": "wall_sky", "floor": "floor_carpet", "layout": [{"i": "window", "x": 5, "y": -1}, {"i": "clock", "x": 1, "y": -1}, {"i": "s_tree", "x": 0, "y": 0}, {"i": "fireplace", "x": 3, "y": 0}, {"i": "sofa", "x": 3, "y": 3}, {"i": "s_gift", "x": 1, "y": 4}, {"i": "s_snowman", "x": 6, "y": 4}]}'::jsonb)
+  ) as v(id, rarity, season, preset)
+ where i.id = v.id;
 -- v2.22: 아이템 기본 정보(원장이 고친 아이템은 건드리지 않음)
 update mw_shop_items i set rarity = v.rarity, season = v.season, place = v.place, w = v.w, unlock = v.unlock, meta_v = 1
   from (values
@@ -403,6 +492,11 @@ create table if not exists mw_homes (
   updated_at timestamptz not null default now()
 );
 alter table mw_monsters add column if not exists acc text;   -- 씌운 액세서리
+alter table mw_monsters add column if not exists gear jsonb not null default '{}'::jsonb;   -- v2.23 장비 {"head","body","hand","back"}
+alter table mw_homes add column if not exists theme text;          -- v2.23 방 테마(없으면 자유 꾸미기)
+-- 예전에 씌운 액세서리를 장비 칸으로 옮김(한 번만)
+update mw_monsters m set gear = jsonb_build_object(i.slot, m.acc)
+  from mw_shop_items i where i.id = m.acc and m.acc is not null and i.slot is not null and m.gear = '{}'::jsonb;
 
 -- v2.18 친구 집 방문 + 스티커
 alter table mw_profiles add column if not exists visit_key text not null default substr(md5(random()::text || clock_timestamp()::text), 1, 12);
@@ -937,6 +1031,7 @@ begin
     end if;
   end if;
   if p_kind = 'grant' and p_amount > 0 then perform mw_stat_rewards(p_student); end if;   -- 스탯 목표 달성 몬스터
+  if p_kind = 'grant' and p_amount > 0 and p_reason = 'nelt' then perform mw_gear_grant(p_student, 'g_goldwings'); end if;   -- v2.23 전설 장비: NELT 레벨업
   return v_lvl;
 end $$;
 
@@ -1314,6 +1409,7 @@ begin
     raise exception '진화석이 부족합니다.'; end if;
   insert into mw_rewards(student_id, reward_key) values (auth.uid(), 'evo:' || m.id || ':' || v_to || ':' || p_use);
   update mw_monsters set stage = v_to where id = m.id;
+  if v_to = 3 then perform mw_gear_grant(auth.uid(), 'g_rainbow'); end if;   -- v2.23 전설 장비: Legend 진화
   -- v2.22: 진화 보너스를 칭찬 포인트에도 쌓음(주간 정산 진화 보너스와 같은 숫자)
   if coalesce((mw_setting(mw_my_academy(), 'evolve_bonus') ->> (v_to - 2))::int, 0) > 0 then
     insert into mw_points(student_id, amount, kind, ref, note)
@@ -1915,7 +2011,10 @@ begin
                           and x.kind = b.kind and x.status = 'won' and not x.revoked and x.id <> b.id);
   v_today := exists (select 1 from mw_battles x where x.student_id = b.student_id and x.book = b.book and x.unit = b.unit
                       and x.kind = b.kind and x.status = 'won' and not x.revoked and x.id <> b.id and x.day = b.day);
-  if v_first then
+  if b.kind = 'hard' then                           -- v2.23 강적: 첫 승리 XP 30·조각 10, 다시 이기면 하루 1번 XP 5·조각 2
+    if v_first then v_base := coalesce((v_cfg ->> 'hard_xp')::int, 30); v_sh := coalesce((v_cfg ->> 'shard_hard')::int, 10);
+    elsif not v_today then v_base := coalesce((v_cfg ->> 'hard_rewin_xp')::int, 5); v_sh := coalesce((v_cfg ->> 'shard_hard_rewin')::int, 2); end if;
+  elsif v_first then
     v_base := (v_cfg ->> (case when v_gate then 'gate_xp' else 'first_xp' end))::int;
     v_sh := (v_cfg ->> (case when v_gate then 'shard_gate' else 'shard_first' end))::int;
   elsif not v_today then                            -- 재승리 보상은 하루에 Unit당 1번
@@ -1941,9 +2040,10 @@ begin
   v_before := mw_battle_shards(b.student_id);
   select active_monster into v_mon from mw_profiles where id = b.student_id;
   if v_give > 0 and v_mon is not null then
-    perform mw_apply_xp(b.student_id, v_mon, v_give, 'battle', case when v_gate then '수문장 승리' else 'Unit 승리' end, null, null, b.id);
+    perform mw_apply_xp(b.student_id, v_mon, v_give, 'battle', case when v_gate then '수문장 승리' when b.kind = 'hard' then '강적 승리' else 'Unit 승리' end, null, null, b.id);
   else v_give := 0; end if;
   update mw_battles set xp = v_give, shards = v_sh, first_win = v_first, mult = v_mult, rewarded = true where id = b.id;
+  if v_first and v_gate then perform mw_gear_grant(b.student_id, 'g_lightbook'); end if;   -- v2.23 전설 장비: 수문장 첫 격파
   perform mw_coin_add(b.student_id, (mw_coin_cfg(b.academy_id) ->> (case when v_first and v_gate then 'gate_first' when v_first then 'battle_first' when v_base > 0 then 'battle_rewin' else 'none' end))::int,
                       case when v_gate then '수문장 승리' else '배틀 승리' end, 'bt:' || b.id);
   return jsonb_build_object('xp', v_give, 'raw', v_raw, 'shards', v_sh, 'first', v_first, 'mult', v_mult, 'streak', v_streak,
@@ -1952,10 +2052,12 @@ begin
 end $$;
 
 -- 학생: 배틀 시작. 서버가 문제를 뽑아 저장하고 첫 문제만(정답 없이) 돌려줌
-create or replace function mw_battle_start(p_book int, p_unit int, p_gate boolean) returns jsonb
+drop function if exists mw_battle_start(int, int, boolean);
+create or replace function mw_battle_start(p_book int, p_unit int, p_gate boolean, p_hard boolean default false) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_ac uuid := mw_my_academy(); v_cfg jsonb; pos mw_word_pos; v_units int[]; v_items jsonb := '[]'::jsonb;
         r record; v_i int := 0; v_opts jsonb; v_opte jsonb; v_hp int; b mw_battles; v_today date := mw_seoul_today(); v_gate boolean := coalesce(p_gate, false);
+        v_hard boolean := coalesce(p_hard, false) and not coalesce(p_gate, false);
         m mw_monsters; v_power int; v_crit numeric; v_t text; v_rnd numeric;
 begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
@@ -1978,6 +2080,11 @@ begin
   else
     v_units := array[p_unit];
   end if;
+  if v_hard then   -- v2.23 강적 도전: 이긴 Unit만, 전투력 실버(130)부터. 문제·체력이 수문장만큼 많음(더 많이 풂)
+    if not exists (select 1 from mw_battles x where x.student_id = auth.uid() and x.book = p_book and x.unit = p_unit and x.kind = 'unit' and x.status = 'won' and not x.revoked) then
+      raise exception '먼저 이 Unit을 한 번 이겨야 강적이 나타나요.'; end if;
+    if ((mw_power(auth.uid())) ->> 'total')::int < 130 then raise exception '강적은 전투력 130(실버)부터 도전할 수 있어요. 몬스터를 키우고 장비를 입혀 보세요.'; end if;
+  end if;
   -- 내 몬스터의 힘: 기본 + 레벨 보너스 + 진화 보너스, 치명타 확률은 어휘 스탯에서
   v_power := (v_cfg ->> 'dmg_base')::int + least((v_cfg ->> 'dmg_lv_max')::int, m.level / greatest(1, (v_cfg ->> 'dmg_lv_div')::int))
              + case m.stage when 3 then (v_cfg ->> 'dmg_legend')::int when 2 then (v_cfg ->> 'dmg_elite')::int else 0 end;
@@ -1989,7 +2096,7 @@ begin
     select w.k, w.en, w.ko from w
       left join mw_word_misses mm on mm.student_id = auth.uid() and mm.academy_id = v_ac and mm.k = w.k
      order by (coalesce(mm.misses, 0) > 0) desc, random()
-     limit (case when v_gate then (v_cfg ->> 'gate_q')::int else (v_cfg ->> 'pool')::int end)
+     limit (case when v_gate or v_hard then (v_cfg ->> 'gate_q')::int else (v_cfg ->> 'pool')::int end)
   loop
     -- 오답 보기(뜻·영어): 같은 Unit 먼저, 모자라면 같은 권에서
     select coalesce(jsonb_agg(z.ko), '[]'::jsonb), coalesce(jsonb_agg(z.en), '[]'::jsonb) into v_opts, v_opte from (
@@ -2002,7 +2109,7 @@ begin
     select jsonb_agg(x order by random()) into v_opts from jsonb_array_elements(v_opts || jsonb_build_array(r.ko)) x;
     select jsonb_agg(x order by random()) into v_opte from jsonb_array_elements(v_opte || jsonb_build_array(r.en)) x;
     v_rnd := random() * 100;
-    v_t := case when v_gate and v_i % 2 = 1 then 'spell'
+    v_t := case when (v_gate or v_hard) and v_i % 2 = 1 then 'spell'
                 when v_rnd < (v_cfg ->> 'mix_rev')::numeric then 'rev'
                 when v_rnd < (v_cfg ->> 'mix_rev')::numeric + (v_cfg ->> 'mix_listen')::numeric then 'listen'
                 else 'mc' end;
@@ -2010,9 +2117,9 @@ begin
     v_i := v_i + 1;
   end loop;
   if v_i = 0 then raise exception '이 Unit에는 아직 단어가 없습니다.'; end if;
-  v_hp := (v_cfg ->> (case when v_gate then 'gate_hp' else 'hp' end))::int;
+  v_hp := (v_cfg ->> (case when v_gate or v_hard then 'gate_hp' else 'hp' end))::int;
   insert into mw_battles(student_id, academy_id, day, book, unit, kind, items, queue, qn, hearts, hearts_max, hp, hp_max, power, crit)
-  values (auth.uid(), v_ac, v_today, p_book, p_unit, case when v_gate then 'gate' else 'unit' end, v_items,
+  values (auth.uid(), v_ac, v_today, p_book, p_unit, case when v_gate then 'gate' when v_hard then 'hard' else 'unit' end, v_items,
           (select jsonb_agg(g) from generate_series(0, v_i - 1) g), 1,
           (v_cfg ->> 'hearts')::int, (v_cfg ->> 'hearts')::int, v_hp, v_hp, v_power, v_crit)
   returning * into b;
@@ -2075,6 +2182,8 @@ begin
                                and x.kind = 'unit' and x.status = 'won' and not x.revoked),
                'gate_won', exists (select 1 from mw_battles x where x.student_id = auth.uid() and x.book = u.book and x.unit = u.unit
                                and x.kind = 'gate' and x.status = 'won' and not x.revoked),
+               'hard_won', exists (select 1 from mw_battles x where x.student_id = auth.uid() and x.book = u.book and x.unit = u.unit
+                               and x.kind = 'hard' and x.status = 'won' and not x.revoked),
                'locked', (u.book = pos.book and u.unit > pos.unit)) order by u.unit) as units
         from (select book, unit, count(*)::int as n from mw_words where academy_id = v_ac and book <= pos.book group by book, unit) u
        group by u.book) bk;
@@ -2166,6 +2275,7 @@ begin
     for k in 1 .. coalesce((v_info ->> 'earned')::int, 0) loop
       perform mw_coin_add(p_student, (v_cfg ->> 'streak')::int, '연속 ' || (v_info ->> 'days') || '일 달성', 'st:' || p_activity || ':' || k);
     end loop;
+    if coalesce((v_info ->> 'earned')::int, 0) > 0 then perform mw_gear_grant(p_student, 'g_emblem'); end if;   -- v2.23 전설 장비: 연속 보상 달성
   end if;
 end $$;
 
@@ -2177,13 +2287,14 @@ begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
   select coalesce(max(level), 1) into v_lv from mw_monsters where student_id = auth.uid() and hatched;
   return jsonb_build_object('coins', mw_coin_balance(auth.uid()), 'points', mw_point_balance(auth.uid()), 'point_rate', 10, 'level', v_lv,
-    'point_save', (select point_save from mw_profiles where id = auth.uid()), 'season', mw_season_now(),
+    'point_save', (select point_save from mw_profiles where id = auth.uid()), 'season', mw_season_now(), 'power', mw_power(auth.uid()),
     'progress', jsonb_build_object('stats', mw_stat_values(auth.uid()),
                                    'books', (select count(*) from mw_books b where b.student_id = auth.uid() and b.status = 'approved'),
                                    'stage', coalesce((select max(stage) from mw_monsters m where m.student_id = auth.uid() and m.hatched), 1)),
     'items', coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'kind', i.kind, 'name', i.name, 'price', i.price, 'min_level', i.min_level,
               'rarity', i.rarity, 'season', i.season, 'image_url', i.image_url, 'unlock', i.unlock, 'place', i.place, 'w', i.w,
-              'owned', coalesce((select v.qty from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id), case when i.price = 0 then 1 else 0 end))
+              'slot', i.slot, 'power', i.power, 'set_id', i.set_id, 'grant_key', i.grant_key, 'preset', i.preset,
+              'owned', coalesce((select v.qty from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id), case when i.price = 0 and i.grant_key is null then 1 else 0 end))
               order by i.kind, i.sort) from mw_shop_items i where i.enabled), '[]'::jsonb));
 end $$;
 
@@ -2200,6 +2311,7 @@ begin
   if not found then raise exception '살 수 없는 물건입니다.'; end if;
   select coalesce(max(level), 1) into v_lv from mw_monsters where student_id = auth.uid() and hatched;
   if v_lv < it.min_level then raise exception 'Lv.%부터 살 수 있어요.', it.min_level; end if;
+  if it.grant_key is not null then raise exception '전설 장비는 살 수 없어요. 실력이 오르면 받을 수 있어요.'; end if;
   if not mw_item_unlocked(auth.uid(), it.unlock) then raise exception '아직 잠겨 있어요. 공부해서 조건을 채우면 열려요.'; end if;
   if it.season is not null and it.season <> mw_season_now() then raise exception '지금은 판매 기간이 아니에요.'; end if;
   select qty into v_has from mw_inventory where student_id = auth.uid() and item_id = it.id;
@@ -2229,6 +2341,7 @@ begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
   select * into h from mw_homes where student_id = auth.uid();
   return jsonb_build_object('wall', coalesce(h.wall, 'wall_cream'), 'floor', coalesce(h.floor, 'floor_wood'), 'layout', coalesce(h.layout, '[]'::jsonb),
+    'theme', h.theme, 'power', mw_power(auth.uid()),
     'inventory', coalesce((select jsonb_object_agg(item_id, qty) from mw_inventory where student_id = auth.uid()), '{}'::jsonb),
     'coins', mw_coin_balance(auth.uid()),
     'points', mw_point_balance(auth.uid()),
@@ -2266,7 +2379,7 @@ begin
     v_norm := v_norm || jsonb_build_array(jsonb_build_object('i', v_i, 'x', v_x, 'y', v_y, 'f', coalesce((e ->> 'f')::boolean, false)));
   end loop;
   insert into mw_homes(student_id, wall, floor, layout, updated_at) values (auth.uid(), p_wall, p_floor, v_norm, now())
-  on conflict (student_id) do update set wall = excluded.wall, floor = excluded.floor, layout = excluded.layout, updated_at = now();
+  on conflict (student_id) do update set wall = excluded.wall, floor = excluded.floor, layout = excluded.layout, theme = null, updated_at = now();
 end $$;
 
 -- 학생: 몬스터에 액세서리 씌우기/벗기기
@@ -2275,9 +2388,12 @@ language plpgsql security definer set search_path = public as $$
 begin
   if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
   if p_item is not null and not exists (select 1 from mw_inventory v join mw_shop_items i on i.id = v.item_id
-                                         where v.student_id = auth.uid() and v.item_id = p_item and i.kind = 'acc') then
+                                         where v.student_id = auth.uid() and v.item_id = p_item and i.kind in ('acc','gear')) then
     raise exception '가지고 있는 액세서리만 씌울 수 있어요.'; end if;
-  update mw_monsters set acc = p_item where id = p_monster and student_id = auth.uid() and hatched;
+  -- v2.23: 예전 기능 — 장비 칸에 입히기로 이어짐
+  update mw_monsters set acc = p_item,
+         gear = case when p_item is null then gear - 'head' else gear || jsonb_build_object(coalesce((select slot from mw_shop_items where id = p_item), 'head'), p_item) end
+   where id = p_monster and student_id = auth.uid() and hatched;
   if not found then raise exception '내 몬스터가 아닙니다.'; end if;
 end $$;
 
@@ -2303,8 +2419,9 @@ begin
   if not v_t and not mw_visit_ok(t.academy_id) then raise exception '지금은 친구 집 방문이 꺼져 있어요.'; end if;
   select * into h from mw_homes where student_id = t.id;
   return jsonb_build_object('name', case when v_t then t.display_name else mw_pub_name(t.id) end, 'mine', t.id = auth.uid(),
-    'wall', coalesce(h.wall, 'wall_cream'), 'floor', coalesce(h.floor, 'floor_wood'), 'layout', coalesce(h.layout, '[]'::jsonb),
-    'monsters', coalesce((select jsonb_agg(jsonb_build_object('species_id', m.species_id, 'stage', m.stage, 'acc', m.acc))
+    'wall', coalesce(h.wall, 'wall_cream'), 'floor', coalesce(h.floor, 'floor_wood'), 'layout', coalesce(h.layout, '[]'::jsonb), 'theme', h.theme,
+    'power', mw_power(t.id),
+    'monsters', coalesce((select jsonb_agg(jsonb_build_object('species_id', m.species_id, 'stage', m.stage, 'acc', m.acc, 'gear', m.gear))
                            from (select * from mw_monsters where student_id = t.id and hatched order by (id = t.active_monster) desc, level desc limit 6) m), '[]'::jsonb),
     'stickers', coalesce((select jsonb_object_agg(q.kind, q.n) from (select kind, count(*)::int as n from mw_stickers where to_student = t.id group by kind) q), '{}'::jsonb),
     'sent_today', exists (select 1 from mw_stickers where from_student = auth.uid() and to_student = t.id and day = mw_seoul_today()));
@@ -2349,12 +2466,14 @@ $$;
 
 -- 내 몬스터 공격력(배틀과 같은 공식)
 create or replace function mw_my_power(p_student uuid) returns int
-language sql stable security definer set search_path = public as $$
-  select coalesce((c ->> 'dmg_base')::int + least((c ->> 'dmg_lv_max')::int, m.level / greatest(1, (c ->> 'dmg_lv_div')::int))
-         + case m.stage when 3 then (c ->> 'dmg_legend')::int when 2 then (c ->> 'dmg_elite')::int else 0 end, 10)
+language plpgsql stable security definer set search_path = public as $$
+begin
+  return (select coalesce((c ->> 'dmg_base')::int + least((c ->> 'dmg_lv_max')::int, m.level / greatest(1, (c ->> 'dmg_lv_div')::int))
+         + case m.stage when 3 then (c ->> 'dmg_legend')::int when 2 then (c ->> 'dmg_elite')::int else 0 end
+         + least(10, coalesce(mw_gear_power(p_student), 0) / 8), 10)   -- v2.23: 장비도 조금 반영(대결 보너스 상한은 그대로)
     from mw_profiles p join mw_monsters m on m.id = p.active_monster, mw_battle_cfg(p.academy_id) c
-   where p.id = p_student;
-$$;
+   where p.id = p_student);
+end $$;
 
 -- 지금 문제(보낼 때 시각을 기록. 한 번 기록되면 다시 불러도 바뀌지 않음)
 create or replace function mw_duel_view(p_duel uuid, p_serve boolean) returns jsonb
@@ -2619,6 +2738,60 @@ exception when others then
   raise notice '몬스터 이미지 저장소 설정을 건너뜁니다(Storage 를 쓸 수 없는 환경): %', sqlerrm;
 end $$;
 
+-- ---------- v2.23 장비 · 전투력 · 방 테마 ----------
+-- 장비 전투력(내부용): 대표 몬스터가 입은 장비 합계 + 같은 세트 4칸이면 +15
+create or replace function mw_gear_power(p_student uuid) returns int
+language sql stable security definer set search_path = public as $$
+  select coalesce((select sum(i.power) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value and i.slot = g.key), 0)::int
+       + case when (select count(*) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value and i.slot = g.key) = 4
+               and (select count(distinct i.set_id) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value) = 1
+               and (select min(i.set_id) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value) is not null then 15 else 0 end
+    from mw_profiles p join mw_monsters m on m.id = p.active_monster where p.id = p_student;
+$$;
+-- 전투력 = 몬스터 기본 힘 × 10 + 장비. 등급: 브론즈 · 실버 130 · 골드 170 · 다이아 220 · 레전드 280
+create or replace function mw_power(p_student uuid) returns jsonb
+language sql stable security definer set search_path = public as $$
+  select jsonb_build_object('base', b, 'gear', g, 'total', b + g,
+    'tier', case when b + g >= 280 then 'legend' when b + g >= 220 then 'diamond' when b + g >= 170 then 'gold' when b + g >= 130 then 'silver' else 'bronze' end)
+  from (select coalesce((select ((c ->> 'dmg_base')::int + least((c ->> 'dmg_lv_max')::int, m.level / greatest(1, (c ->> 'dmg_lv_div')::int))
+                 + case m.stage when 3 then (c ->> 'dmg_legend')::int when 2 then (c ->> 'dmg_elite')::int else 0 end) * 10
+                  from mw_profiles p join mw_monsters m on m.id = p.active_monster, mw_battle_cfg(p.academy_id) c where p.id = p_student), 100) as b,
+               coalesce(mw_gear_power(p_student), 0) as g) q;
+$$;
+-- 전설 장비 주기(내부용, 한 번만)
+create or replace function mw_gear_grant(p_student uuid, p_item text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from mw_shop_items where id = p_item and kind = 'gear') then return; end if;
+  insert into mw_inventory(student_id, item_id, qty) values (p_student, p_item, 1) on conflict (student_id, item_id) do nothing;
+end $$;
+-- 학생: 장비 입히기/벗기기(가진 것만, 맞는 칸에만)
+create or replace function mw_gear_equip(p_monster uuid, p_slot text, p_item text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  if p_slot not in ('head','body','hand','back') then raise exception '장비 칸이 올바르지 않습니다.'; end if;
+  if not exists (select 1 from mw_monsters where id = p_monster and student_id = auth.uid() and hatched) then raise exception '내 몬스터가 아닙니다.'; end if;
+  if p_item is not null and not exists (select 1 from mw_inventory v join mw_shop_items i on i.id = v.item_id
+                                         where v.student_id = auth.uid() and v.item_id = p_item and i.kind = 'gear' and i.slot = p_slot) then
+    raise exception '가지고 있는 장비만 그 칸에 입힐 수 있어요.'; end if;
+  update mw_monsters set gear = case when p_item is null then gear - p_slot else gear || jsonb_build_object(p_slot, p_item) end,
+         acc = case when p_slot = 'head' then p_item else acc end
+   where id = p_monster;
+  return mw_power(auth.uid());
+end $$;
+-- 학생: 방 테마 바꾸기(가진 테마만). null 이면 자유 꾸미기로
+create or replace function mw_home_theme(p_theme text) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_student_ok() then raise exception '승인된 학생 계정이 아닙니다.'; end if;
+  if p_theme is not null and not exists (select 1 from mw_shop_items i where i.id = p_theme and i.kind = 'theme'
+        and (i.price = 0 or exists (select 1 from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id))) then
+    raise exception '가지고 있는 테마만 쓸 수 있어요.'; end if;
+  insert into mw_homes(student_id, theme, updated_at) values (auth.uid(), p_theme, now())
+  on conflict (student_id) do update set theme = excluded.theme, updated_at = now();
+end $$;
+
 -- ---------- v2.22 칭찬 포인트 · 아이템 관리 ----------
 -- 학생: 🐷 모으기 켜기/끄기(켜면 주간 정산 때 칭찬모아로 보내지 않고 모음)
 create or replace function mw_points_save(p_on boolean) returns boolean
@@ -2660,7 +2833,7 @@ begin
   if d ? 'name' and not (length(btrim(d ->> 'name')) between 1 and 20) then raise exception '이름은 1~20자로 입력해 주세요.'; end if;
   if d ? 'price' and not ((d ->> 'price') ~ '^[0-9]{1,5}$') then raise exception '가격은 0~99999 사이 숫자로 입력해 주세요.'; end if;
   if d ? 'min_level' and not ((d ->> 'min_level') ~ '^[0-9]{1,3}$' and (d ->> 'min_level')::int >= 1) then raise exception '레벨은 1 이상 숫자로 입력해 주세요.'; end if;
-  if d ? 'rarity' and d ->> 'rarity' not in ('common','rare','epic') then raise exception '희귀도가 올바르지 않습니다.'; end if;
+  if d ? 'rarity' and d ->> 'rarity' not in ('common','rare','epic','legend') then raise exception '희귀도가 올바르지 않습니다.'; end if;
   if d ? 'season' and jsonb_typeof(d -> 'season') <> 'null' and d ->> 'season' not in ('spring','summer','autumn','winter') then raise exception '시즌이 올바르지 않습니다.'; end if;
   if d ? 'enabled' and jsonb_typeof(d -> 'enabled') <> 'boolean' then raise exception '판매 여부가 올바르지 않습니다.'; end if;
   if d ? 'image_url' and not (coalesce(d ->> 'image_url', '') = '' or (d ->> 'image_url') ~ '^(https://|data:image/(png|webp);base64,)') then raise exception '그림 주소가 올바르지 않습니다.'; end if;
@@ -2718,7 +2891,7 @@ begin
                          'mw_stat_values','mw_stat_rewards','mw_grant_species','mw_stone_balance','mw_streak_info',
                          'mw_seoul_today','mw_wd_idx','mw_battle_cfg','mw_battle_shards','mw_battle_day_ok','mw_battle_streak',
                          'mw_battle_mult','mw_word_backlog','mw_word_advance','mw_battle_recheck','mw_battle_state','mw_battle_reward',
-                         'mw_coin_cfg','mw_coin_balance','mw_xp_wallet','mw_point_rate','mw_point_balance','mw_item_unlocked','mw_coin_add','mw_coin_revoke','mw_coin_on_approve','mw_visit_ok','mw_pub_name','mw_duel_cfg','mw_my_power','mw_duel_view','mw_duel_finish','mw_duel_expire') then
+                         'mw_coin_cfg','mw_coin_balance','mw_xp_wallet','mw_gear_power','mw_gear_grant','mw_point_rate','mw_point_balance','mw_item_unlocked','mw_coin_add','mw_coin_revoke','mw_coin_on_approve','mw_visit_ok','mw_pub_name','mw_duel_cfg','mw_my_power','mw_duel_view','mw_duel_finish','mw_duel_expire') then
       execute format('grant execute on function %s to authenticated', f.sig);
     end if;
   end loop;
