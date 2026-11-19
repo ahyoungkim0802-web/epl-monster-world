@@ -10,6 +10,7 @@
 --        방 꾸미기 아이템 54종(시즌 소품 10 추가) · 희귀도 · 그림 · 시즌 판매 · 학습 성과 해금 · 벽걸이/좌우 뒤집기 · 아이템 관리(본사 원장)
 -- v2.23: 몬스터 장비 꾸미기(머리·몸·손·등 4칸, 전투력·세트 효과·전설 장비는 실력으로만), 전투력 등급(브론즈~레전드), 강적 도전(실버부터, 문제 2배), 방 테마 8종(한 번에 바꾸기)
 -- v2.24: 장비 29종 3D 그림(assets/equipment)과 그림에 맞춘 이름, 몬스터별 장비 위치·크기·회전 맞춤(mw_gear_fit, 본사 원장)
+-- v2.25: 몬스터는 진화로만 성장(장비 전투력 끔, 장비·가구 데이터는 그대로 둠), 방 테마 12종(진화하면 열리는 테마 포함), 가구 자유 꾸미기는 화면에서 뺌
 -- v2.19: 친구 대결(같은 10문제를 각자 풀고 점수 비교, 서버가 시간 측정, 코인만, 하루 3번, 48시간 지나면 취소, 처음엔 꺼 둠)
 -- v2.18: 친구 집 방문 + 스티커(정해진 6종, 친구마다 하루 1개, 자유 글쓰기 없음). 방문은 임시 열쇠(visit_key)로만, 이름은 지도 표시 방식 그대로
 -- v2.17: 코인·상점·내 집(가구·벽지·바닥·몬스터 액세서리). 활동 승인·배틀 승리·연속 기록·진화로 코인, 반려·취소 시 회수
@@ -403,6 +404,13 @@ insert into mw_shop_items(id, kind, name, price, min_level, sort) values
  ('t_autumn','theme','단풍 할로윈',400,1,81),
  ('t_winter','theme','눈꽃 산장',450,1,82)
 on conflict (id) do nothing;
+-- v2.25: 방 테마 4종 추가
+insert into mw_shop_items(id, kind, name, price, min_level, sort) values
+ ('t_library','theme','책벌레 도서관',500,1,90),
+ ('t_ocean','theme','바닷속 수족관',600,1,91),
+ ('t_sky','theme','구름 위 하늘정원',0,1,92),
+ ('t_space','theme','별빛 우주 관측소',0,1,93)
+on conflict (id) do nothing;
 -- 장비 칸·전투력·세트·획득 조건(원장이 고칠 수 없는 항목이라 늘 덮어씀). 희귀도는 처음 한 번만
 update mw_shop_items i set slot = v.slot, power = v.power, set_id = v.set_id, grant_key = v.grant_key,
        rarity = case when i.meta_v < 2 then v.rarity else i.rarity end
@@ -438,7 +446,10 @@ update mw_shop_items i set slot = v.slot, power = v.power, set_id = v.set_id, gr
    ('g_goldwings','back','legend',20,'legend','nelt')
   ) as v(id, slot, rarity, power, set_id, grant_key)
  where i.id = v.id;
-update mw_shop_items set kind = 'gear' where kind = 'acc';   -- 예전 액세서리는 모두 머리·몸 장비로
+update mw_shop_items set kind = 'gear' where kind = 'acc';
+-- v2.25: 진화하면 열리는 방 테마(하늘정원 = Elite, 우주 관측소 = Legend), 도서관 = 원서 5권
+update mw_shop_items i set unlock = v.u from (values ('t_sky','{"t":"stage","v":2}'::jsonb),('t_space','{"t":"stage","v":3}'::jsonb),('t_library','{"t":"books","v":5}'::jsonb)) as v(id, u)
+ where i.id = v.id and i.meta_v < 2;   -- 예전 액세서리는 모두 머리·몸 장비로
 -- v2.24: 새 장비 그림에 맞춘 이름(원장이 직접 고친 이름은 그대로)
 update mw_shop_items i set name = v.name from (values ('acc_hat','털모자'),('acc_ribbon','별 캡 모자'),('acc_glasses','탐험 고글'),('acc_headphones','별빛 헤드폰'),('acc_flower','꽃 사슴뿔 화관'),('acc_crown','수정 왕관'),('g_wizhat','마법사 모자'),('g_helmet','기사 투구'),('g_rainbow','영웅의 월계관'),('acc_scarf','목도리 겨울 코트'),('acc_star','숲의 잎사귀 망토'),('g_robe','별빛 후드 로브'),('g_armor','기사 갑옷'),('g_vest','탐험가 조끼'),('g_jacket','모험가 튜닉'),('g_emblem','영웅의 망토깃'),('g_wand','별 지팡이'),('g_sword','기사의 깃발'),('g_lens','나침반 지팡이'),('g_mic','달빛 지팡이'),('g_book','마법 영어책'),('g_lightbook','빛의 랜턴'),('g_cape_p','달빛 망토'),('g_cape_r','깃발 장식'),('g_rocket','모험가 가방끈'),('g_fairy','수정 고리'),('g_angel','천사 날개'),('g_dragon','숲의 정령 날개'),('g_goldwings','별빛 고리')) as v(id, name) where i.id = v.id and i.meta_v < 2;
 -- v2.24: 몬스터별 장비 위치 맞춤. species_id '*' + stage 0 = 그 장비의 모든 몬스터 기본값
@@ -464,7 +475,11 @@ update mw_shop_items i set preset = v.preset, rarity = case when i.meta_v < 2 th
    ('t_spring','rare','spring','{"wall": "wall_mint", "floor": "floor_grass", "layout": [{"i": "window", "x": 1, "y": -1}, {"i": "poster", "x": 4, "y": -1}, {"i": "clock", "x": 6, "y": -1}, {"i": "s_cherry", "x": 0, "y": 0}, {"i": "plant", "x": 1, "y": 0}, {"i": "drawers", "x": 2, "y": 0}, {"i": "s_cherry", "x": 4, "y": 0}, {"i": "cactus", "x": 5, "y": 0}, {"i": "plant", "x": 6, "y": 0}, {"i": "s_cherry", "x": 7, "y": 0}, {"i": "petbed", "x": 0, "y": 2}, {"i": "rug", "x": 2, "y": 2}, {"i": "beanbag", "x": 7, "y": 2}, {"i": "s_picnic", "x": 4, "y": 3}, {"i": "s_cherry", "x": 0, "y": 4}, {"i": "plant", "x": 7, "y": 4}]}'::jsonb),
    ('t_summer','rare','summer','{"wall": "wall_sky", "floor": "floor_tile", "layout": [{"i": "window", "x": 1, "y": -1}, {"i": "poster", "x": 4, "y": -1}, {"i": "window", "x": 5, "y": -1}, {"i": "aquarium", "x": 0, "y": 0}, {"i": "plant", "x": 1, "y": 0}, {"i": "s_fan", "x": 3, "y": 0}, {"i": "aquarium", "x": 4, "y": 0}, {"i": "drawers", "x": 5, "y": 0}, {"i": "plant", "x": 7, "y": 0}, {"i": "beanbag", "x": 6, "y": 1}, {"i": "s_melon", "x": 2, "y": 2}, {"i": "rug", "x": 4, "y": 2}, {"i": "s_float", "x": 0, "y": 3}, {"i": "s_fan", "x": 7, "y": 3}, {"i": "cactus", "x": 0, "y": 5}, {"i": "s_float", "x": 6, "y": 5}]}'::jsonb),
    ('t_autumn','rare','autumn','{"wall": "wall_stripe", "floor": "floor_wood", "layout": [{"i": "window", "x": 1, "y": -1}, {"i": "clock", "x": 4, "y": -1}, {"i": "pennant", "x": 6, "y": -1}, {"i": "s_maple", "x": 0, "y": 0}, {"i": "bed", "x": 1, "y": 0}, {"i": "lamp", "x": 3, "y": 0}, {"i": "bookshelf", "x": 4, "y": 0}, {"i": "s_maple", "x": 5, "y": 0}, {"i": "drawers", "x": 6, "y": 0}, {"i": "s_maple", "x": 7, "y": 0}, {"i": "s_pumpkin", "x": 0, "y": 2}, {"i": "rug", "x": 2, "y": 2}, {"i": "chair", "x": 5, "y": 2}, {"i": "s_pumpkin", "x": 7, "y": 2}, {"i": "s_pumpkin", "x": 1, "y": 4}, {"i": "s_maple", "x": 7, "y": 4}]}'::jsonb),
-   ('t_winter','epic','winter','{"wall": "wall_sky", "floor": "floor_carpet", "layout": [{"i": "window", "x": 1, "y": -1}, {"i": "clock", "x": 4, "y": -1}, {"i": "window", "x": 5, "y": -1}, {"i": "s_tree", "x": 0, "y": 0}, {"i": "s_gift", "x": 1, "y": 0}, {"i": "fireplace", "x": 2, "y": 0}, {"i": "s_gift", "x": 4, "y": 0}, {"i": "bookshelf", "x": 5, "y": 0}, {"i": "lamp", "x": 6, "y": 0}, {"i": "s_tree", "x": 7, "y": 0}, {"i": "s_gift", "x": 0, "y": 2}, {"i": "sofa", "x": 2, "y": 2}, {"i": "rug", "x": 4, "y": 2}, {"i": "s_snowman", "x": 7, "y": 2}, {"i": "s_snowman", "x": 0, "y": 4}, {"i": "s_gift", "x": 7, "y": 4}]}'::jsonb)
+   ('t_winter','epic','winter','{"wall": "wall_sky", "floor": "floor_carpet", "layout": [{"i": "window", "x": 1, "y": -1}, {"i": "clock", "x": 4, "y": -1}, {"i": "window", "x": 5, "y": -1}, {"i": "s_tree", "x": 0, "y": 0}, {"i": "s_gift", "x": 1, "y": 0}, {"i": "fireplace", "x": 2, "y": 0}, {"i": "s_gift", "x": 4, "y": 0}, {"i": "bookshelf", "x": 5, "y": 0}, {"i": "lamp", "x": 6, "y": 0}, {"i": "s_tree", "x": 7, "y": 0}, {"i": "s_gift", "x": 0, "y": 2}, {"i": "sofa", "x": 2, "y": 2}, {"i": "rug", "x": 4, "y": 2}, {"i": "s_snowman", "x": 7, "y": 2}, {"i": "s_snowman", "x": 0, "y": 4}, {"i": "s_gift", "x": 7, "y": 4}]}'::jsonb),
+   ('t_library','rare',null,'{"wall": "wall_stripe", "floor": "floor_wood", "layout": [{"i": "poster", "x": 0, "y": -1}, {"i": "clock", "x": 2, "y": -1}, {"i": "window", "x": 4, "y": -1}, {"i": "pennant", "x": 7, "y": -1}, {"i": "bookshelf", "x": 0, "y": 0}, {"i": "bookshelf", "x": 1, "y": 0}, {"i": "bookshelf", "x": 2, "y": 0}, {"i": "lamp", "x": 3, "y": 0}, {"i": "bookshelf", "x": 4, "y": 0}, {"i": "bookshelf", "x": 5, "y": 0}, {"i": "globe", "x": 6, "y": 0}, {"i": "plant", "x": 7, "y": 0}, {"i": "desk", "x": 0, "y": 2}, {"i": "chair", "x": 2, "y": 2}, {"i": "rug", "x": 3, "y": 3}, {"i": "beanbag", "x": 7, "y": 2}, {"i": "lamp", "x": 7, "y": 4}, {"i": "plant", "x": 0, "y": 5}]}'::jsonb),
+   ('t_ocean','epic',null,'{"wall": "wall_sky", "floor": "floor_tile", "layout": [{"i": "window", "x": 1, "y": -1}, {"i": "poster", "x": 4, "y": -1}, {"i": "window", "x": 5, "y": -1}, {"i": "aquarium", "x": 0, "y": 0}, {"i": "aquarium", "x": 1, "y": 0}, {"i": "aquarium", "x": 2, "y": 0}, {"i": "plant", "x": 3, "y": 0}, {"i": "aquarium", "x": 4, "y": 0}, {"i": "aquarium", "x": 5, "y": 0}, {"i": "aquarium", "x": 6, "y": 0}, {"i": "plant", "x": 7, "y": 0}, {"i": "s_float", "x": 0, "y": 2}, {"i": "rug", "x": 3, "y": 2}, {"i": "aquarium", "x": 7, "y": 2}, {"i": "beanbag", "x": 6, "y": 4}, {"i": "s_float", "x": 1, "y": 5}]}'::jsonb),
+   ('t_sky','epic',null,'{"wall": "wall_sky", "floor": "floor_cloud", "layout": [{"i": "window", "x": 2, "y": -1}, {"i": "clock", "x": 5, "y": -1}, {"i": "plant", "x": 0, "y": 0}, {"i": "s_cherry", "x": 1, "y": 0}, {"i": "plant", "x": 2, "y": 0}, {"i": "telescope", "x": 3, "y": 0}, {"i": "s_cherry", "x": 5, "y": 0}, {"i": "plant", "x": 6, "y": 0}, {"i": "s_cherry", "x": 7, "y": 0}, {"i": "beanbag", "x": 0, "y": 2}, {"i": "rug", "x": 3, "y": 2}, {"i": "petbed", "x": 7, "y": 2}, {"i": "plant", "x": 0, "y": 4}, {"i": "cactus", "x": 7, "y": 4}]}'::jsonb),
+   ('t_space','legend',null,'{"wall": "wall_star", "floor": "floor_cloud", "layout": [{"i": "poster", "x": 0, "y": -1}, {"i": "window", "x": 2, "y": -1}, {"i": "poster", "x": 5, "y": -1}, {"i": "clock", "x": 7, "y": -1}, {"i": "telescope", "x": 0, "y": 0}, {"i": "globe", "x": 1, "y": 0}, {"i": "telescope", "x": 2, "y": 0}, {"i": "trophy", "x": 3, "y": 0}, {"i": "trophy", "x": 4, "y": 0}, {"i": "telescope", "x": 5, "y": 0}, {"i": "globe", "x": 6, "y": 0}, {"i": "telescope", "x": 7, "y": 0}, {"i": "globe", "x": 0, "y": 2}, {"i": "rug", "x": 3, "y": 2}, {"i": "lamp", "x": 7, "y": 2}, {"i": "trophy", "x": 0, "y": 4}, {"i": "lamp", "x": 7, "y": 4}]}'::jsonb)
   ) as v(id, rarity, season, preset)
  where i.id = v.id;
 -- v2.22: 아이템 기본 정보(원장이 고친 아이템은 건드리지 않음)
@@ -2758,11 +2773,7 @@ end $$;
 -- 장비 전투력(내부용): 대표 몬스터가 입은 장비 합계 + 같은 세트 4칸이면 +15
 create or replace function mw_gear_power(p_student uuid) returns int
 language sql stable security definer set search_path = public as $$
-  select coalesce((select sum(i.power) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value and i.slot = g.key), 0)::int
-       + case when (select count(*) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value and i.slot = g.key) = 4
-               and (select count(distinct i.set_id) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value) = 1
-               and (select min(i.set_id) from jsonb_each_text(m.gear) g join mw_shop_items i on i.id = g.value) is not null then 15 else 0 end
-    from mw_profiles p join mw_monsters m on m.id = p.active_monster where p.id = p_student;
+  select 0;   -- v2.25: 몬스터는 진화로만 성장. 장비 전투력은 끔(입은 장비 기록은 그대로 둠)
 $$;
 -- 전투력 = 몬스터 기본 힘 × 10 + 장비. 등급: 브론즈 · 실버 130 · 골드 170 · 다이아 220 · 레전드 280
 create or replace function mw_power(p_student uuid) returns jsonb
@@ -2804,6 +2815,8 @@ begin
   if p_theme is not null and not exists (select 1 from mw_shop_items i where i.id = p_theme and i.kind = 'theme'
         and (i.price = 0 or exists (select 1 from mw_inventory v where v.student_id = auth.uid() and v.item_id = i.id))) then
     raise exception '가지고 있는 테마만 쓸 수 있어요.'; end if;
+  if p_theme is not null and not mw_item_unlocked(auth.uid(), (select unlock from mw_shop_items where id = p_theme)) then
+    raise exception '아직 열리지 않은 테마예요. 몬스터를 진화시키면 열려요.'; end if;
   insert into mw_homes(student_id, theme, updated_at) values (auth.uid(), p_theme, now())
   on conflict (student_id) do update set theme = excluded.theme, updated_at = now();
 end $$;
