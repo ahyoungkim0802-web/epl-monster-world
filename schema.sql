@@ -9,6 +9,7 @@
 -- v2.22: 칭찬 포인트(⭐) — 주간 정산과 같은 기준으로 쌓이고, 상점에서 쓴 만큼 칭찬모아로 넘어가지 않음. 입력 완료 = 보냄 기록. 🐷 모으기. XP 구매 없앰.
 --        방 꾸미기 아이템 54종(시즌 소품 10 추가) · 희귀도 · 그림 · 시즌 판매 · 학습 성과 해금 · 벽걸이/좌우 뒤집기 · 아이템 관리(본사 원장)
 -- v2.23: 몬스터 장비 꾸미기(머리·몸·손·등 4칸, 전투력·세트 효과·전설 장비는 실력으로만), 전투력 등급(브론즈~레전드), 강적 도전(실버부터, 문제 2배), 방 테마 8종(한 번에 바꾸기)
+-- v2.24: 장비 29종 3D 그림(assets/equipment)과 그림에 맞춘 이름, 몬스터별 장비 위치·크기·회전 맞춤(mw_gear_fit, 본사 원장)
 -- v2.19: 친구 대결(같은 10문제를 각자 풀고 점수 비교, 서버가 시간 측정, 코인만, 하루 3번, 48시간 지나면 취소, 처음엔 꺼 둠)
 -- v2.18: 친구 집 방문 + 스티커(정해진 6종, 친구마다 하루 1개, 자유 글쓰기 없음). 방문은 임시 열쇠(visit_key)로만, 이름은 지도 표시 방식 그대로
 -- v2.17: 코인·상점·내 집(가구·벽지·바닥·몬스터 액세서리). 활동 승인·배틀 승리·연속 기록·진화로 코인, 반려·취소 시 회수
@@ -438,6 +439,21 @@ update mw_shop_items i set slot = v.slot, power = v.power, set_id = v.set_id, gr
   ) as v(id, slot, rarity, power, set_id, grant_key)
  where i.id = v.id;
 update mw_shop_items set kind = 'gear' where kind = 'acc';   -- 예전 액세서리는 모두 머리·몸 장비로
+-- v2.24: 새 장비 그림에 맞춘 이름(원장이 직접 고친 이름은 그대로)
+update mw_shop_items i set name = v.name from (values ('acc_hat','털모자'),('acc_ribbon','별 캡 모자'),('acc_glasses','탐험 고글'),('acc_headphones','별빛 헤드폰'),('acc_flower','꽃 사슴뿔 화관'),('acc_crown','수정 왕관'),('g_wizhat','마법사 모자'),('g_helmet','기사 투구'),('g_rainbow','영웅의 월계관'),('acc_scarf','목도리 겨울 코트'),('acc_star','숲의 잎사귀 망토'),('g_robe','별빛 후드 로브'),('g_armor','기사 갑옷'),('g_vest','탐험가 조끼'),('g_jacket','모험가 튜닉'),('g_emblem','영웅의 망토깃'),('g_wand','별 지팡이'),('g_sword','기사의 깃발'),('g_lens','나침반 지팡이'),('g_mic','달빛 지팡이'),('g_book','마법 영어책'),('g_lightbook','빛의 랜턴'),('g_cape_p','달빛 망토'),('g_cape_r','깃발 장식'),('g_rocket','모험가 가방끈'),('g_fairy','수정 고리'),('g_angel','천사 날개'),('g_dragon','숲의 정령 날개'),('g_goldwings','별빛 고리')) as v(id, name) where i.id = v.id and i.meta_v < 2;
+-- v2.24: 몬스터별 장비 위치 맞춤. species_id '*' + stage 0 = 그 장비의 모든 몬스터 기본값
+create table if not exists mw_gear_fit (
+  species_id text not null,
+  stage int not null check (stage between 0 and 3),
+  item_id text not null references mw_shop_items(id) on delete cascade,
+  dx numeric not null default 0 check (dx between -2 and 2),
+  dy numeric not null default 0 check (dy between -2 and 2),
+  s numeric not null default 1 check (s between 0.3 and 2.5),
+  r numeric not null default 0 check (r between -60 and 60),
+  updated_at timestamptz not null default now(),
+  primary key (species_id, stage, item_id)
+);
+alter table mw_gear_fit enable row level security;
 update mw_shop_items i set preset = v.preset, rarity = case when i.meta_v < 2 then v.rarity else i.rarity end,
        season = case when i.meta_v < 2 then v.season else i.season end
   from (values
@@ -2790,6 +2806,24 @@ begin
     raise exception '가지고 있는 테마만 쓸 수 있어요.'; end if;
   insert into mw_homes(student_id, theme, updated_at) values (auth.uid(), p_theme, now())
   on conflict (student_id) do update set theme = excluded.theme, updated_at = now();
+end $$;
+
+-- v2.24 장비 위치 맞춤: 모두 읽기, 본사 원장만 저장
+create or replace function mw_gear_fits() returns jsonb
+language sql stable security definer set search_path = public as $$
+  select coalesce(jsonb_agg(jsonb_build_object('species_id', species_id, 'stage', stage, 'item_id', item_id, 'dx', dx, 'dy', dy, 's', s, 'r', r)), '[]'::jsonb) from mw_gear_fit;
+$$;
+create or replace function mw_gear_fit_save(p_species text, p_stage int, p_item text, p_dx numeric, p_dy numeric, p_s numeric, p_r numeric) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if not mw_is_owner() then raise exception '장비 위치는 본사 원장 계정에서만 맞출 수 있습니다.'; end if;
+  if not exists (select 1 from mw_shop_items where id = p_item and kind = 'gear') then raise exception '없는 장비입니다.'; end if;
+  if not ((p_species = '*' and p_stage = 0) or (exists (select 1 from mw_species where id = p_species) and p_stage between 1 and 3)) then raise exception '몬스터가 올바르지 않습니다.'; end if;
+  delete from mw_gear_fit where species_id = p_species and stage = p_stage and item_id = p_item;
+  if p_dx is null then return; end if;   -- 값 없이 부르면 맞춤값 지우기
+  if not (p_dx between -2 and 2 and p_dy between -2 and 2 and p_s between 0.3 and 2.5 and p_r between -60 and 60) then raise exception '값이 범위를 벗어났습니다.'; end if;
+  insert into mw_gear_fit(species_id, stage, item_id, dx, dy, s, r) values (p_species, p_stage, p_item, round(p_dx, 2), round(p_dy, 2), round(p_s, 2), round(p_r, 1));
+  perform mw_log('gear_fit', null, jsonb_build_object('species', p_species, 'stage', p_stage, 'item', p_item));
 end $$;
 
 -- ---------- v2.22 칭찬 포인트 · 아이템 관리 ----------
