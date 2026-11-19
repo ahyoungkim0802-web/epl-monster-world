@@ -25,3 +25,5 @@
 - 몬스터 그림은 임시 SVG. `mw_species.forms`의 `image_url`로 교체 가능.
 - 방 꾸미기 아이템 54종의 기본 그림은 `assets/items/`(임시 시안). 아이템 관리 화면에서 PNG를 올리면 `mw_shop_items.image_url`로 바뀐다. `SHOP_SEED`·`ITEM_META`(index.html)와 schema.sql의 아이템 기본 정보는 같아야 한다.
 - 화면 문구는 한국어, 과장 없는 차분한 톤.
+
+- 방 테마 그림: assets/themes/<id>.webp(1448×1086, 4:3)·카드용 assets/themes/thumb/<id>.webp(480). index.html THEME_ART 에 ID를 적으면 기본 그림으로 쓰임. 원장이 아이템 관리에서 올린 image_url 이 있으면 그것이 우선. t_star·t_space 는 그림 없음(칸 배치 방). 그림 방은 몬스터가 앞쪽 러그 영역(RM_ART)만 걸어 다니고, 그림 위 파티클 효과는 끔.

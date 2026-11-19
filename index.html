@@ -403,7 +403,7 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--lav-deep)}
 .sitem .pv.wide{width:100%;height:auto;background:none}.sitem.wide .pv .room3{border-radius:10px}
 .ctile.hard{background:linear-gradient(135deg,#3A2A5E,#5B3FB0);color:#fff;border-color:#7A5CC9}.ctile.hard span{color:#E8DDFF}.ctile.hard.won{background:linear-gradient(135deg,#2F5E4A,#3FB38C)}
 .room3{position:relative;width:100%;aspect-ratio:4/3;border-radius:18px;overflow:hidden;background:#EFE6D6;box-shadow:inset 0 0 0 2px #00000010;user-select:none;-webkit-user-select:none}
-.room3 .rart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block}.room3.art .rgar{display:none}
+.room3 .rart{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}.room3.art .rgar{display:none}
 .room3 .rbg,.room3 .rgrid{position:absolute;inset:0;width:100%;height:100%;display:block}
 .room3 .rgrid{z-index:2}.room3 .rgrid .gc{fill:#ffffff00;stroke:#28314B;stroke-opacity:.16;stroke-width:.8;cursor:pointer}.room3 .rgrid .gc:hover{fill:#FFFFFF66}
 .room3 .fi{position:absolute;height:auto;filter:drop-shadow(0 2px 1.5px #2B244040) saturate(1.05);pointer-events:none}.room3 .fsh{position:absolute;border-radius:50%;background:radial-gradient(closest-side,#2B244055,#2B244022 60%,transparent);pointer-events:none}.room3 .fi.wl{filter:drop-shadow(0 3px 3px #2B244033)}.room3.edit .fi{pointer-events:auto;cursor:grab;touch-action:none}
@@ -1742,9 +1742,11 @@ function roomHTML(h,mons,edit){if(!edit&&h&&h.art)return roomArtHTML(h,mons);con
     return `<div class="rmon" data-k="${k}" data-x="${X}" data-y="${Y}" data-s="${k===0?92:74}" style="left:${pc((X-sz/2)/4)};top:${pc((Y-sz)/3)};width:${pc(sz/4)};z-index:${rmZ(Y)}"><div class="rmi"><div class="rmb">${monSVG(m)}</div></div><span class="rbub"></span></div>`}).join('');
   const th=h&&h.fx;return `<div class="room3 ${edit?'edit':''} ${live?'live':''} ${th?'fx-'+th:''}" data-occ="${occ}">${bg}${th?roomFX(th,h.mini):''}${grid}${items}${ms}</div>`}
 function roomArtHTML(h,mons){const live=!h.mini,pc=v=>v.toFixed(2)+'%';
-  const ms=(mons||[]).slice(0,4).map((m,k,a)=>{const st=live&&_rmLast[k],X=st?st.x:200+(k-(a.length-1)/2)*62,Y=st?st.y:270,sz=(k===0?92:74)*rmScale(Y);
+  const ms=(mons||[]).slice(0,4).map((m,k,a)=>{const st=live&&_rmLast[k],X=st?st.x:200+(k-(a.length-1)/2)*62,Y=st?st.y:262,sz=(k===0?92:74)*rmScale(Y);
     return `<div class="rmon" data-k="${k}" data-x="${X}" data-y="${Y}" data-s="${k===0?92:74}" style="left:${pc((X-sz/2)/4)};top:${pc((Y-sz)/3)};width:${pc(sz/4)};z-index:${rmZ(Y)}"><div class="rmi"><div class="rmb">${monSVG(m)}</div></div><span class="rbub"></span></div>`}).join('');
-  return `<div class="room3 art ${live?'live':''} ${h.fx?'fx-'+h.fx:''}" data-occ=""><img class="rart" src="${esc(h.art)}" alt="" draggable="false">${h.fx?roomFX(h.fx,h.mini):''}${ms}</div>`}
+  return `<div class="room3 art ${live?'live':''}" data-occ="" data-art="1"><img class="rart" src="${esc(h.art)}" alt="" draggable="false" onerror="rmArtFail(this)">${ms}</div>`}
+/* 그림을 못 불러오면 그 방만 원래(칸 배치) 방으로 다시 그림 */
+function rmArtFail(img){const room=img.closest('.room3');if(!room||room.dataset.fail)return;room.dataset.fail='1';room.classList.remove('art');img.remove();room.style.background='linear-gradient(#F6EBD9 0 55%,#E2C39A 55%)'}
 /* v2.23 방에서 걸어 다니는 몬스터: 빈 칸을 골라 천천히 걷고, 멈추면 감정 표현. 바닥을 누르면 그쪽으로, 몬스터를 누르면 깡충 + 영어 한마디 */
 const _rmLast=[];const _rmW=new WeakMap();
 const rmScale=Y=>.78+.32*Math.max(0,Math.min(1,(Y-120)/180));
@@ -1752,7 +1754,8 @@ const rmZ=Y=>20+Math.min(5,Math.max(0,Math.floor((Y-120)/180*6)))*10+9;
 const RM_SAY=['Hi!','Hello, friend!','Let\'s read!','I love English!','Good job!','Yay!','You can do it!','Let\'s study!','Awesome!','Super!'];
 const RM_EMO=['♥','✨','♪','!','😊','💤'];
 function rmFree(room){const occ=new Set((room.dataset.occ||'').split(';').filter(Boolean)),c=[];for(let y=2;y<6;y++)for(let x=0;x<8;x++)if(!occ.has(x+','+y))c.push([x,y]);return c}
-function rmPick(room){const c=rmFree(room);const[x,y]=c.length?c[Math.random()*c.length|0]:[3+(Math.random()*2|0),4];const t=(y+.7)/6,F=fl(t);return[F.l+(x+.5)*F.w/8,RM.wy+RM.fh*t]}
+const RM_ART={x0:80,x1:320,y0:222,y1:292};
+function rmPick(room){if(room.dataset.art){const A=RM_ART;return[A.x0+Math.random()*(A.x1-A.x0),A.y0+Math.random()*(A.y1-A.y0)]}const c=rmFree(room);const[x,y]=c.length?c[Math.random()*c.length|0]:[3+(Math.random()*2|0),4];const t=(y+.7)/6,F=fl(t);return[F.l+(x+.5)*F.w/8,RM.wy+RM.fh*t]}
 function rmPlace(el,st){const sz=(+el.dataset.s)*rmScale(st.y);el.style.left=((st.x-sz/2)/4).toFixed(2)+'%';el.style.top=((st.y-sz)/3).toFixed(2)+'%';el.style.width=(sz/4).toFixed(2)+'%';el.style.zIndex=rmZ(st.y);el.firstElementChild.style.transform=st.face<0?'scaleX(-1)':''}
 function rmBub(el,txt,ms){const b=el.querySelector('.rbub');if(!b)return;b.textContent=txt;b.classList.remove('on');void b.offsetWidth;b.classList.add('on');clearTimeout(b._t);b._t=setTimeout(()=>b.classList.remove('on'),ms||1600)}
 const RM_STILL=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').matches}catch(e){return false}})();
@@ -1766,7 +1769,7 @@ const RM_STILL=(()=>{try{return matchMedia('(prefers-reduced-motion: reduce)').m
 document.addEventListener('click',e=>{const room=e.target.closest&&e.target.closest('.room3.live');if(!room||RM_STILL)return;const mon=e.target.closest('.rmon');
   if(mon){mon.classList.remove('hop');void mon.offsetWidth;mon.classList.add('hop');rmBub(mon,RM_SAY[Math.random()*RM_SAY.length|0],1800);try{say&&say(mon.querySelector('.rbub').textContent)}catch(_){}return}
   const r=room.getBoundingClientRect(),X=(e.clientX-r.left)/r.width*400,Y=(e.clientY-r.top)/r.height*300;if(Y<130)return;const el=room.querySelector('.rmon');if(!el)return;const st=_rmW.get(el);if(!st)return;
-  const t=Math.max(.15,Math.min(.97,(Y-RM.wy)/RM.fh)),F=fl(t);st.tx=Math.max(F.l+18,Math.min(F.l+F.w-18,X));st.ty=RM.wy+RM.fh*t;st.run=true;setTimeout(()=>{st.run=false},1500)});
+  if(room.dataset.art){const A=RM_ART;st.tx=Math.max(A.x0-30,Math.min(A.x1+30,X));st.ty=Math.max(A.y0-12,Math.min(A.y1,Y))}else{const t=Math.max(.15,Math.min(.97,(Y-RM.wy)/RM.fh)),F=fl(t);st.tx=Math.max(F.l+18,Math.min(F.l+F.w-18,X));st.ty=RM.wy+RM.fh*t}st.run=true;setTimeout(()=>{st.run=false},1500)});
 /* 테마 효과: 반짝이는 별·반딧불·음표·꽃잎·물방울·단풍·눈 + 전구 장식 + 빛줄기 (CSS 애니메이션, 동작 줄이기 설정이면 멈춤) */
 const THEME_FX={t_cozy:{p:'dust',n:14,g:['#FFD36E','#FF9F80','#9FE3B4','#7FC4FF'],l:'warm'},t_star:{p:'twinkle',n:22,g:['#FFF1B0','#C79BFF','#7FD9F0'],l:'night'},t_forest:{p:'firefly',n:14,g:['#C8F59A','#FFE38A'],l:'leaf'},
   t_music:{p:'note',n:12,g:['#FF8AD8','#7FC4FF','#FFE38A','#9FE3B4'],l:'disco'},t_spring:{p:'petal',n:18,g:['#FFC2D6','#FFE38A'],l:'warm'},t_summer:{p:'bubble',n:16,g:['#BFE8FF','#FFE38A'],l:'sun'},
@@ -1801,8 +1804,10 @@ const lockWhy=(i,S)=>{const g=S.progress||{};if(S.level<i.min_level)return `Lv.$
 const unlockTxt=u=>!u?'':u.t==='stat'?`${STAT[u.k]?STAT[u.k][0]:u.k} ${Number(u.v).toLocaleString()}`:u.t==='books'?`원서 ${u.v}권`:u.t==='stage'?`${STN[u.v]} 진화`:'';
 /* v2.23 방 테마: 테마가 있으면 그 테마의 벽지·바닥·가구로 보여 줌(자유 꾸미기 배치는 그대로 보관) */
 /* v2.27 방 일러스트: 테마에 통짜 방 그림이 있으면(원장이 올린 image_url, 또는 assets/themes 에 넣고 THEME_ART 에 적은 것) 그 그림 위에 몬스터·효과만 */
-const THEME_ART=new Set([]);   // 예: ['t_cozy','t_star'] → assets/themes/t_cozy.webp
-const themeArt=t=>t&&((t.image_url)||(THEME_ART.has(t.id)?'assets/themes/'+t.id+'.webp':''));
+const THEME_ART=new Set(['t_cozy','t_forest','t_music','t_spring','t_summer','t_autumn','t_winter','t_library','t_ocean','t_sky']);   // 기본 방 그림(assets/themes/<id>.webp, 카드용 작은 그림 assets/themes/thumb/<id>.webp). t_star·t_space 는 아직 그림 없음 → 기존 방 유지
+const THEME_ART_V='?v=1';
+/* 원장이 올린 그림(image_url)이 있으면 그것이 우선, 없으면 기본 그림. mini=카드용 작은 그림 */
+const themeArt=(t,mini)=>t&&((t.image_url)||(THEME_ART.has(t.id)?'assets/themes/'+(mini?'thumb/':'')+t.id+'.webp'+THEME_ART_V:''));
 function roomOf(h){const id=h.theme||(!(h.layout||[]).length?'t_cozy':null),t=id&&itemOf(id);if(!(t&&t.preset))return h;const art=themeArt(t);return art?{...h,...t.preset,layout:[],art,fx:id}:{...h,...t.preset,fx:id}}
 const tierBadge=P=>{const t=tierOf(P.total);return `<span class="tier t-${t[0]}">${t[0]==='legend'?'👑':t[0]==='diamond'?'💎':t[0]==='gold'?'🥇':t[0]==='silver'?'🥈':'🥉'} ${t[1]} · 전투력 ${P.total}</span>`};
 function viewDress(H,S){const m=myActive();if(!m)return '<div class="empty">먼저 몬스터를 골라 주세요.</div>';const P=H.power||S.power||{base:100,gear:0,total:100,tier:'bronze'},t=tierOf(P.total),ni=TIERS.findIndex(x=>x[0]===t[0])+1,nx=TIERS[ni];
@@ -1837,7 +1842,7 @@ function themeCard(t,S,H,cur){const why=lockWhy(t,S),own=(t.owned>0||t.price===0
     :own?`<span class="ts ts-own">✓ 가지고 있어요 · 눌러서 적용</span>`:off?`<span class="ts ts-off">📅 ${SEASON_KO[t.season]} 한정</span>`:currencyPrice(t,H);
   return `<div class="tcard r-${t.rarity||'common'} ${on?'on':''} ${why?'lk':''} ${off?'off':''} ${canUse?'can':''}" ${canUse?`role="button" tabindex="0" data-act="hTheme" data-id="${t.id}" aria-label="${esc(t.name)} 테마로 바꾸기"`:''}>
     ${on?'<span class="tcrown" aria-hidden="true">👑</span>':''}
-    <div class="tpv" role="img" aria-label="${esc(t.name)} 방 미리 보기">${roomHTML({...t.preset,theme:null,fx:t.id,mini:true,art:themeArt(t),layout:themeArt(t)?[]:t.preset.layout},[],false)}${why?`<span class="tlk">🔒 ${esc(why)}</span>`:''}</div>
+    <div class="tpv" role="img" aria-label="${esc(t.name)} 방 미리 보기">${roomHTML({...t.preset,theme:null,fx:t.id,mini:true,art:themeArt(t,true),layout:themeArt(t)?[]:t.preset.layout},[],false)}${why?`<span class="tlk">🔒 ${esc(why)}</span>`:''}</div>
     <div class="tname"><b>${esc(t.name)}</b></div>
     <div class="tbadges">${rarityBadge(t.rarity)}${seasonBadge(t.season)}</div>
     <div class="tstate">${state}</div></div>`}
@@ -1945,7 +1950,7 @@ function viewItemsAdmin(){const L=UI.itemsAdmin;if(!L)return '<div class="empty"
     <div class="row" style="gap:6px;flex-wrap:wrap">${[...(GEAR_ON?[['gear','장비'],['fit','🎯 장비 위치 맞추기']]:[]),['theme','방 테마'],['furniture','가구'],['seasonal','시즌 소품'],['deco','벽지·바닥']].map(([k,l])=>`<button class="ck ${f===k?'on':''}" data-act="itF" data-v="${k}">${l}${k==='fit'?'':' '+L.filter(i=>k==='deco'?(i.kind==='wall'||i.kind==='floor'):i.kind===k).length}</button>`).join('')}</div>
     ${f==='fit'?viewFit():''}
     <div class="tw"><table><thead><tr><th>그림</th><th>이름 · ID</th><th class="r">가격</th><th>희귀도</th><th>시즌</th><th>해금</th><th>판매</th><th></th></tr></thead><tbody>
-    ${rows.map(i=>`<tr><td><span class="itth" style="${i.kind==='wall'||i.kind==='floor'?`background:${texBg(i.id,24)}`:''}">${i.kind==='wall'||i.kind==='floor'?'':`<img src="${esc(i.image_url||ITEM_IMG(i.id))}" alt="">`}</span></td><td><b>${esc(i.name)}</b><br><span class="tiny muted">${esc(i.id)}${i.image_url?' · 새 그림':''}</span></td><td class="r num">🪙 ${i.price}<br><span class="tiny muted">⭐ ${(i.price*PT_RATE).toLocaleString()}</span></td>
+    ${rows.map(i=>`<tr><td><span class="itth" style="${i.kind==='wall'||i.kind==='floor'?`background:${texBg(i.id,24)}`:''}">${i.kind==='wall'||i.kind==='floor'?'':`<img src="${esc(i.kind==='theme'?(themeArt(i,true)||ITEM_IMG(i.id)):(i.image_url||ITEM_IMG(i.id)))}" alt="">`}</span></td><td><b>${esc(i.name)}</b><br><span class="tiny muted">${esc(i.id)}${i.image_url?' · 새 그림':''}</span></td><td class="r num">🪙 ${i.price}<br><span class="tiny muted">⭐ ${(i.price*PT_RATE).toLocaleString()}</span></td>
       <td><span class="pill ${(RARITY[i.rarity]||RARITY.common)[1]}">${(RARITY[i.rarity]||RARITY.common)[0]}</span></td><td class="tiny">${i.season?SEASON_KO[i.season]:'—'}</td><td class="tiny">${[i.min_level>1?'Lv.'+i.min_level:'',unlockTxt(i.unlock)].filter(Boolean).join(' · ')||'—'}</td><td>${i.enabled===false?'<span class="pill gray">중지</span>':'<span class="pill ok">판매</span>'}</td><td><button class="btn sm" data-act="itOpen" data-id="${esc(i.id)}">고치기</button></td></tr>`).join('')}</tbody></table></div></section>`}
 /* 장비 위치 맞추기(본사 원장): 몬스터·단계·장비를 고르고 위치·크기·회전을 맞춘 뒤 저장. '모든 몬스터'에 저장하면 그 장비의 기본값 */
 function viewFit(){const F=UI.fit=UI.fit||{sp:'flamy',st:1,id:'g_wizhat'},sp=SPECIES_SEED.find(x=>x.id===F.sp)||SPECIES_SEED[0],it=itemOf(F.id),cur=F.v||fitOf(F.sp,F.st,F.id)||{dx:0,dy:0,s:1,r:0};F.v=cur;
@@ -1959,7 +1964,7 @@ function viewFit(){const F=UI.fit=UI.fit||{sp:'flamy',st:1,id:'g_wizhat'},sp=SPE
       <p class="tiny muted">값은 머리 크기를 기준으로 한 비율이라 몬스터 크기가 달라도 같은 자리에 맞습니다. 저장하면 모든 학원 학생 화면에 바로 반영됩니다.</p></div></div>`}
 function itModal(id){const i=(UI.itemsAdmin||[]).find(x=>x.id===id);if(!i)return;UI.itEdit={id,file:null,del:false};const tex=i.kind==='wall'||i.kind==='floor',u=i.unlock||{};
   modal(`<h2>${esc(i.name)} <button class="btn sm g" data-act="close">닫기</button></h2><div class="stack">
-    <div class="dae"><div class="pv" id="itPv">${tex?`<div style="width:100%;height:100%;border-radius:16px;background:${texBg(i.id,40)}"></div>`:`<img src="${esc(i.image_url||ITEM_IMG(i.id))}" alt="">`}</div><div class="stack" style="gap:6px"><span class="tiny muted">${KIND_KO[i.kind]} · ${esc(i.id)}</span>
+    <div class="dae"><div class="pv" id="itPv">${tex?`<div style="width:100%;height:100%;border-radius:16px;background:${texBg(i.id,40)}"></div>`:i.kind==='theme'?`<img src="${esc(themeArt(i)||ITEM_IMG(i.id))}" alt="" style="object-fit:cover;border-radius:12px">`:`<img src="${esc(i.image_url||ITEM_IMG(i.id))}" alt="">`}</div><div class="stack" style="gap:6px"><span class="tiny muted">${KIND_KO[i.kind]} · ${esc(i.id)}</span>
       <label class="btn sm">${i.kind==='theme'?'방 그림 고르기':'PNG 고르기'}<input type="file" id="itFile" accept="${i.kind==='theme'?'image/png,image/webp,image/jpeg':'image/png,image/webp'}" hidden></label>${i.image_url?'<button class="btn sm g" data-act="itImgDel">기본 그림으로</button>':''}<span class="tiny muted" id="itImgSt">${i.image_url?'새 그림 사용 중':'기본 그림 사용 중'}</span></div></div>
     <div class="grid g2"><label class="field">이름<input id="itName" maxlength="20" value="${esc(i.name)}"></label><label class="field">가격 (🪙 코인, ⭐는 ×${PT_RATE})<input id="itPrice" type="number" min="0" max="99999" value="${i.price}"></label>
       <label class="field">희귀도<select id="itRar">${Object.entries(RARITY).map(([k,[l]])=>`<option value="${k}" ${i.rarity===k?'selected':''}>${l}</option>`).join('')}</select></label>
