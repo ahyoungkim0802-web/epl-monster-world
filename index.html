@@ -342,6 +342,61 @@ input[type=checkbox]{width:20px;height:20px;accent-color:var(--lav-deep)}
 .sets{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px}.set{border:2px solid #E6E1D3;border-radius:14px;padding:8px;display:flex;flex-direction:column;gap:3px}.set.done{border-color:#F2C14E;background:#FFFBEA}
 .sdot{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:8px;background:#F1F2F6;filter:grayscale(1);opacity:.5}.sdot.on{background:#FFF3C4;filter:none;opacity:1}
 .perks{display:grid;gap:6px}.perk{display:flex;flex-direction:column;gap:2px;border-radius:12px;padding:8px 10px;background:#F4F5FB;opacity:.75}.perk.ok{background:#EAF6F1;opacity:1}
+.wrap.s.wide{max-width:1240px}
+.tshop{--tp:#6B3FB6;--tp2:#8E5BE0;--tg:#E8B64A;--tc:#FFF8EA;position:relative;border-radius:28px;padding:18px 16px 16px;overflow:hidden;
+  background:radial-gradient(120% 80% at 50% -10%,#FFE9F6 0,transparent 55%),radial-gradient(90% 70% at 100% 100%,#FDE7C9 0,transparent 60%),linear-gradient(160deg,#EFE4FF,#FBE4F1 55%,#FFF3E1);
+  box-shadow:0 10px 30px #7A4FB422,inset 0 0 0 2px #fff}
+.tsky{position:absolute;inset:0;pointer-events:none}.tsky i{position:absolute;width:6px;height:6px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px #FFF6C8;opacity:.6;animation:tw 3.2s ease-in-out infinite;animation-delay:var(--d)}
+.thead{position:relative;display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.tplaque{margin:0;display:inline-flex;align-items:center;gap:8px;font-size:22px;font-weight:900;color:#fff;letter-spacing:.02em;padding:8px 22px;border-radius:999px;
+  background:linear-gradient(180deg,var(--tp2),var(--tp));border:3px solid var(--tg);box-shadow:0 4px 0 #4A2A86,0 8px 16px #4A2A8655,inset 0 2px 0 #ffffff55;text-shadow:0 2px 0 #4A2A86}
+.tplaque .tsp{color:#FFE38A}.thelp{font-size:13px;font-weight:800;color:#5B3FB0;background:#fffc;border:2px solid #D8C6FF;border-radius:999px;padding:6px 14px;box-shadow:0 2px 6px #7A4FB422}
+.tframe{position:relative;border-radius:22px;padding:14px;background:linear-gradient(180deg,#FFFDF8cc,#FFF4FBcc);border:4px solid #fff;box-shadow:inset 0 0 0 2px #F1D9A0,0 6px 18px #7A4FB41f}
+.tgrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px}
+@media (max-width:1180px){.tgrid{grid-template-columns:repeat(4,minmax(0,1fr))}}@media (max-width:900px){.tgrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:640px){.tgrid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.tplaque{font-size:19px;padding:6px 16px}}@media (max-width:340px){.tgrid{grid-template-columns:1fr}}
+.tcard{position:relative;display:flex;flex-direction:column;gap:7px;align-items:stretch;text-align:center;padding:8px 8px 10px;border-radius:22px;background:linear-gradient(180deg,#FFFFFF,var(--tc));
+  border:2px solid #EADFC6;box-shadow:0 6px 0 #E6D6B6,0 10px 18px #6B3FB61f,inset 0 0 0 3px #fff;transition:transform .15s ease,box-shadow .15s ease}
+.tcard::before{content:"";position:absolute;left:8%;right:8%;top:2px;height:14px;border-radius:12px;background:linear-gradient(180deg,#ffffffd0,transparent);pointer-events:none;z-index:4}
+.tcard.r-rare{border-color:#F1C86A}.tcard.r-epic{border-color:#B99BF2;box-shadow:0 6px 0 #D8C6FF,0 10px 18px #6B3FB62a,inset 0 0 0 3px #fff}.tcard.r-legend{border-color:#E2A6F2;box-shadow:0 6px 0 #F1C6E9,0 10px 20px #C68CF244,inset 0 0 0 3px #fff}
+.tcard.can{cursor:pointer}.tcard.can:hover{transform:translateY(-3px) scale(1.02);box-shadow:0 9px 0 #E6D6B6,0 16px 24px #6B3FB62e,inset 0 0 0 3px #fff}.tcard.can:active{transform:translateY(2px);box-shadow:0 3px 0 #E6D6B6,0 6px 10px #6B3FB61f,inset 0 0 0 3px #fff}
+.tcard:focus-visible{outline:4px solid #8E5BE0;outline-offset:3px}
+.tcard.on{border-color:#F2C14E;box-shadow:0 0 0 4px #FFE38A,0 0 22px 6px #FFD36Eaa,0 6px 0 #E6C16A,inset 0 0 0 3px #fff;animation:tglow 2.6s ease-in-out infinite}
+@keyframes tglow{50%{box-shadow:0 0 0 4px #FFE38A,0 0 30px 10px #FFD36Ecc,0 6px 0 #E6C16A,inset 0 0 0 3px #fff}}
+.tcrown{position:absolute;left:50%;top:-14px;transform:translateX(-50%);font-size:24px;z-index:5;filter:drop-shadow(0 2px 2px #7A4E0055)}
+.tpv{position:relative;z-index:3;border-radius:16px;overflow:hidden;box-shadow:inset 0 0 0 3px #fff,0 3px 8px #6B3FB62a}.tpv .room3{border-radius:16px}
+.tcard.lk .tpv .room3{filter:grayscale(.55) brightness(.9)}.tcard.off .tpv .room3{filter:saturate(.75)}
+.tlk{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);background:#2B2440e0;color:#fff;font-weight:800;font-size:12px;border-radius:999px;padding:5px 10px;white-space:nowrap;z-index:80}
+.tname{margin:0 -2px;padding:6px 8px;border-radius:14px;background:linear-gradient(180deg,#FFFDF6,#FFF1D6);border:2px solid #F1D9A0;box-shadow:inset 0 -2px 0 #F6E3B8}
+.tname b{font-size:15px;font-weight:900;color:#3A2A5E;letter-spacing:-.01em;display:block;line-height:1.25;word-break:keep-all}
+.tbadges{display:flex;gap:5px;justify-content:center;flex-wrap:wrap}
+.rb,.sb{display:inline-flex;align-items:center;gap:3px;font-size:12px;font-weight:800;border-radius:999px;padding:3px 10px;border:2px solid transparent}
+.rb-common{background:linear-gradient(180deg,#F5F7FB,#DCE2EE);color:#4A5470;border-color:#C9D2E3}.rb-rare{background:linear-gradient(180deg,#FFF3C4,#F6D27A);color:#7A4E00;border-color:#E8B64A}
+.rb-epic{background:linear-gradient(180deg,#EEE2FF,#C9AEF7);color:#4B2A99;border-color:#A98BEB}.rb-legend{background:linear-gradient(90deg,#FFD1D1,#FFF1B0,#D2F7DC,#D6ECFF,#EBDDFF);color:#5B2A99;border-color:#E2A6F2}
+.sb-spring{background:#FFE6EF;color:#B8336A;border-color:#F7B8CF}.sb-summer{background:#FFF4C9;color:#9A6A00;border-color:#F3D47A}.sb-autumn{background:#FFE6D6;color:#B5521A;border-color:#F3B48A}.sb-winter{background:#E3F2FF;color:#1E6BB0;border-color:#A9D3F5}
+.tstate{min-height:40px;display:flex;align-items:center;justify-content:center}
+.ts{display:inline-flex;align-items:center;justify-content:center;gap:4px;font-size:12.5px;font-weight:900;border-radius:999px;padding:6px 12px;line-height:1.2}
+.ts-on{background:linear-gradient(180deg,#5FD39A,#2E9C78);color:#fff;box-shadow:0 3px 0 #1F7A5C;text-shadow:0 1px 0 #1F7A5C}.ts-own{background:#EAF6F1;color:#1F7A5C;border:2px solid #A8DEC6}
+.ts-lock{background:linear-gradient(90deg,#F1E4FF,#FFE6F4);color:#5B2A99;border:2px solid #D8C6FF}.ts-off{background:#FFF8EA;color:#7A5A2A;border:2px solid #F1D9A0}
+.cp{display:flex;flex-direction:column;gap:6px;width:100%}
+.cp button{display:flex;align-items:center;justify-content:center;gap:5px;width:100%;min-height:36px;border-radius:999px;font:inherit;font-weight:900;font-size:14px;cursor:pointer;transition:transform .1s ease,filter .1s}
+.cp button i{font-style:normal}.cp button em{font-style:normal;font-size:11px;font-weight:800;opacity:.85;margin-left:2px}.cp button em::before{content:"· "}
+.cp-star{color:#fff;background:linear-gradient(180deg,#9C72EE,#6B3FB6);border:2px solid #5A30A0;box-shadow:0 3px 0 #4A2A86,inset 0 2px 0 #ffffff44}
+.cp-coin{color:#6B4A12;background:linear-gradient(180deg,#FFF8E1,#F6E2B0);border:2px solid #E8C77A;box-shadow:0 3px 0 #D9B460}
+.cp button:not(:disabled):hover{filter:brightness(1.06)}.cp button:not(:disabled):active{transform:translateY(2px);box-shadow:none}
+.cp button:disabled{cursor:not-allowed;filter:grayscale(.35);opacity:.72;box-shadow:none}
+.tfoot{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;padding-right:110px;min-height:84px}
+.thint{font-size:13px;font-weight:800;color:#6B4A9A;background:#fffc;border:2px solid #F1D9A0;border-radius:999px;padding:6px 14px}
+.tbtns{display:flex;gap:10px;flex-wrap:wrap}
+.tb-main,.tb-sub{font:inherit;font-weight:900;font-size:16px;border-radius:999px;padding:12px 22px;min-height:48px;cursor:pointer;transition:transform .1s ease}
+.tb-main{color:#fff;background:linear-gradient(180deg,#9C72EE,#6B3FB6);border:3px solid #F2C14E;box-shadow:0 4px 0 #4A2A86,0 8px 14px #4A2A8644,inset 0 2px 0 #ffffff55}
+.tb-sub{color:#6B4A12;background:linear-gradient(180deg,#FFFDF4,#F6E2B0);border:3px solid #E8C77A;box-shadow:0 4px 0 #D9B460}
+.tb-main:active,.tb-sub:active{transform:translateY(3px);box-shadow:none}.tb-main:focus-visible,.tb-sub:focus-visible,.cp button:focus-visible{outline:4px solid #8E5BE0;outline-offset:3px}
+.tmascot{position:absolute;right:4px;bottom:-6px;width:110px;pointer-events:none}.tmascot svg{width:100%;height:auto;display:block;position:relative;z-index:1;animation:breathe 2.8s ease-in-out infinite;transform-origin:50% 90%}
+.tcush{position:absolute;left:6%;right:6%;bottom:2%;height:26%;border-radius:50%;background:radial-gradient(circle at 50% 35%,#E7D6FF,#B99BF2);box-shadow:0 4px 10px #6B3FB633}
+.tnote{position:relative;margin:10px 4px 0;font-size:12px;color:#6B5A8A}
+@media (max-width:640px){.tfoot{padding-right:0}.tmascot{display:none}.tb-main,.tb-sub{flex:1;font-size:15px}.tbtns{width:100%}}
+@media (prefers-reduced-motion: reduce){.tcard.on,.tsky i,.tmascot svg{animation:none}.tcard.can:hover{transform:none}}
 .th{position:relative}.th.lk .room3{filter:grayscale(.55) brightness(.92)}.thlock{position:absolute;left:50%;top:28%;transform:translateX(-50%);background:#28314Bdd;color:#fff;font-weight:800;font-size:12px;border-radius:999px;padding:4px 10px;white-space:nowrap;z-index:80}
 .th.r-legend{border-color:#C68CF2;box-shadow:0 0 0 2px #C68CF233}.th.r-epic{border-color:#F1C86A}
 .thg{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}.th{border:2px solid #E6E1D3;border-radius:16px;padding:6px;display:flex;flex-direction:column;gap:5px;align-items:center;text-align:center;background:#fff}.th.on{border-color:#3FB38C}.th .room3{border-radius:12px}
@@ -1207,7 +1262,7 @@ function viewStudent(){
       <div class="cal">${'월화수목금토일'.split('').map(c=>`<span class="h">${c}</span>`).join('')}${cells}</div>
       <div class="kpis"><div class="kpi"><b>${cnt}</b><span>학습한 날</span></div><div class="kpi"><b>${sum}</b><span>획득 XP</span></div><div class="kpi"><b>${cnt?Math.round(sum/cnt):0}</b><span>하루 평균</span></div></div></section>`;
   }
-  $('#app').innerHTML=`${demoBar()}<div class="wrap s">${header()}${main}</div><nav class="tabs">${tabs.map(([k,v])=>`<button class="${UI.tab===k?'on':''}" data-act="tab" data-t="${k}">${v}${k==='dex'&&eggs.length?`<span class="dot">${eggs.length}</span>`:''}</button>`).join('')}</nav>`;
+  $('#app').innerHTML=`${demoBar()}<div class="wrap s ${UI.tab==='house'?'wide':''}">${header()}${main}</div><nav class="tabs">${tabs.map(([k,v])=>`<button class="${UI.tab===k?'on':''}" data-act="tab" data-t="${k}">${v}${k==='dex'&&eggs.length?`<span class="dot">${eggs.length}</span>`:''}</button>`).join('')}</nav>`;
   celebrate();
 }
 let celebrating=false;
@@ -1757,7 +1812,31 @@ function viewDress(H,S){const m=myActive();if(!m)return '<div class="empty">먼�
       return `<div class="perk ${ok?'ok':''}"><b>${ok?'✅':'🔒'} ${a}</b><span class="tiny">${T[1]} ${T[2]} · ${b}</span></div>`}).join('')}
       <div class="perk ok"><b>🤝 친구 대결 보너스</b><span class="tiny">강할수록 대결 점수 보너스(최대 +${(W.set.duel||{}).power_max||20}%)</span></div></div></section>`;
   return hero+grid+sets+perks}
-function viewHouse(){const H=UI.home,S=UI.shop,v=['home','friends','visit','duel'].includes(UI.hv)?UI.hv:'home',mons=W.monsters.filter(m=>m.hatched).sort((x,y)=>(y.id===W.me.active_monster)-(x.id===W.me.active_monster)).slice(0,4);
+/* v2.26 방 테마 상점(게임형 UI): ThemeCard · RarityBadge · SeasonBadge · CurrencyPrice. 상태·가격·잠김·시즌은 실제 데이터(S.items·H)에서 */
+const SEASON_IC={spring:['🌸','봄'],summer:['☀️','여름'],autumn:['🍁','가을'],winter:['❄️','겨울']};
+const rarityBadge=r=>{const R={common:['🥈','일반'],rare:['⭐','레어'],epic:['👑','에픽'],legend:['🌈','전설']}[r]||['🥈','일반'];return `<span class="rb rb-${r||'common'}">${R[0]} ${R[1]}</span>`};
+const seasonBadge=se=>se&&SEASON_IC[se]?`<span class="sb sb-${se}">${SEASON_IC[se][0]} ${SEASON_IC[se][1]}</span>`:'';
+function currencyPrice(t,H){const pts=Math.max(0,H.points||0),pp=t.price*PT_RATE,lowP=pts<pp,lowC=(H.coins||0)<t.price;
+  return `<div class="cp"><button class="cp-star" data-act="hBuy" data-id="${t.id}" data-pay="point" ${lowP?'disabled':''} aria-label="칭찬 포인트 ${pp}점으로 사기${lowP?' (포인트 부족)':''}"><i>⭐</i>${pp.toLocaleString()}${lowP?'<em>부족</em>':''}</button>
+    <button class="cp-coin" data-act="hBuy" data-id="${t.id}" data-pay="coin" ${lowC?'disabled':''} aria-label="코인 ${t.price}개로 사기${lowC?' (코인 부족)':''}"><i>🪙</i>${t.price.toLocaleString()}${lowC?'<em>부족</em>':''}</button></div>`}
+function themeCard(t,S,H,cur){const why=lockWhy(t,S),own=(t.owned>0||t.price===0)&&!why,on=cur===t.id,off=t.season&&t.season!==S.season&&!own,canUse=own&&!on;
+  const state=on?`<span class="ts ts-on">✦ 지금 내 방 ✦</span>`:why?`<span class="ts ts-lock">${t.unlock&&t.unlock.t==='stage'?'🏆 진화 보상':'🔒 학습 보상'}</span>`
+    :own?`<span class="ts ts-own">✓ 가지고 있어요 · 눌러서 적용</span>`:off?`<span class="ts ts-off">📅 ${SEASON_KO[t.season]} 한정</span>`:currencyPrice(t,H);
+  return `<div class="tcard r-${t.rarity||'common'} ${on?'on':''} ${why?'lk':''} ${off?'off':''} ${canUse?'can':''}" ${canUse?`role="button" tabindex="0" data-act="hTheme" data-id="${t.id}" aria-label="${esc(t.name)} 테마로 바꾸기"`:''}>
+    ${on?'<span class="tcrown" aria-hidden="true">👑</span>':''}
+    <div class="tpv" role="img" aria-label="${esc(t.name)} 방 미리 보기">${roomHTML({...t.preset,theme:null,fx:t.id,mini:true},[],false)}${why?`<span class="tlk">🔒 ${esc(why)}</span>`:''}</div>
+    <div class="tname"><b>${esc(t.name)}</b></div>
+    <div class="tbadges">${rarityBadge(t.rarity)}${seasonBadge(t.season)}</div>
+    <div class="tstate">${state}</div></div>`}
+function themeShop(T,S,H,cur,mons){const m=mons&&mons[0];
+  return `<section class="tshop" aria-label="방 테마">
+    <div class="tsky" aria-hidden="true">${Array.from({length:14},(_,i)=>`<i style="left:${(i*37)%100}%;top:${(i*53)%90}%;--d:${(i%5)*.6}s"></i>`).join('')}</div>
+    <header class="thead"><h3 class="tplaque"><span aria-hidden="true">🏠</span> 방 테마 <span class="tsp" aria-hidden="true">✦</span></h3><span class="thelp">✨ 누르면 한 번에 바뀌어요 ✨</span></header>
+    <div class="tframe"><div class="tgrid">${T.map(t=>themeCard(t,S,H,cur)).join('')}</div></div>
+    <footer class="tfoot"><span class="thint">✨ 가구를 하나씩 놓고 싶다면</span><div class="tbtns"><button class="tb-main" data-act="hTab" data-v="edit">🪑 자유 꾸미기</button><button class="tb-sub" data-act="hTab" data-v="inv">🧰 보관함</button></div>
+      ${m?`<div class="tmascot" aria-hidden="true"><span class="tcush"></span>${monSVG(m)}</div>`:''}</footer>
+    <p class="tnote">🏆 하늘정원은 Elite, 우주 관측소는 Legend로 진화하면 무료로 열려요. 📅 계절 테마는 그 계절에만 살 수 있고, 산 테마는 계속 쓸 수 있어요.</p></section>`}
+function viewHouse(){const H=UI.home,S=UI.shop,v=['home','friends','visit','duel','edit','inv'].includes(UI.hv)?UI.hv:'home',mons=W.monsters.filter(m=>m.hatched).sort((x,y)=>(y.id===W.me.active_monster)-(x.id===W.me.active_monster)).slice(0,4);
   const tabOn=k=>v===k||(k==='home'&&(v==='edit'||v==='inv'));
   const top=`<div class="row" style="justify-content:space-between;flex-wrap:wrap;gap:8px"><div class="row" style="gap:6px;flex-wrap:wrap">${[['home','🏠 My Room'],...(H&&H.visit?[['friends','👫 Friends']]:[])].map(([k,l])=>`<button class="ck ${tabOn(k)?'on':''}" data-act="hTab" data-v="${k}">${l}</button>`).join('')}</div>
     <span class="row" style="gap:6px"><span class="coin pt" title="칭찬 포인트 · 상점에서 쓴 만큼 칭찬모아로 넘어가지 않아요">⭐ ${H?Math.max(0,H.points||0).toLocaleString():'…'}</span><span class="coin" title="코인 · 게임 안에서만 써요">🪙 ${H?H.coins.toLocaleString():'…'}</span></span></div>`;
@@ -1775,11 +1854,7 @@ function viewHouse(){const H=UI.home,S=UI.shop,v=['home','friends','visit','duel
   if(v==='dress')return `<div class="stack">${top}${viewDress(H,S)}</div>`;
   if(v==='home'){const T=S.items.filter(i=>i.kind==='theme').sort((a,b)=>(!!a.unlock-!!b.unlock)||a.sort-b.sort),cur=H.theme||(!(H.layout||[]).length?'t_cozy':null),pts=Math.max(0,H.points||0);
     return `<div class="stack">${top}<section class="card" style="padding:8px">${roomHTML(roomOf(H),mons,false)}</section>
-    <section class="card stack"><h3>Room Themes <small>누르면 한 번에 바뀌어요</small></h3><div class="thg">${T.map(t=>{const own=(t.owned>0||t.price===0)&&!lockWhy(t,S),on=cur===t.id,off=t.season&&t.season!==S.season&&!own;
-      const why=lockWhy(t,S);
-      return `<div class="th ${on?'on':''} ${why?'lk':''} r-${t.rarity}">${roomHTML({...t.preset,theme:null,fx:t.id,mini:true},[],false)}${why?`<span class="thlock">🔒 ${esc(why)}</span>`:''}<b>${esc(t.name)}</b><span class="row" style="gap:4px;justify-content:center"><span class="pill ${(RARITY[t.rarity]||RARITY.common)[1]}">${(RARITY[t.rarity]||RARITY.common)[0]}</span>${t.season?`<span class="pill">${SEASON_KO[t.season].slice(0,SEASON_KO[t.season].indexOf('('))}</span>`:''}</span>
-        ${on?'<span class="pill ok">지금 내 방</span>':why?`<span class="pill legend">${t.unlock&&t.unlock.t==='stage'?'🏆 진화 보상':'🔒 학습 보상'}</span>`:own?`<button class="btn sm p" data-act="hTheme" data-id="${t.id}">이 방으로</button>`:off?`<span class="pill gray">🗓 ${SEASON_KO[t.season]} 한정</span>`:`<div class="buy2"><button class="btn sm p" data-act="hBuy" data-id="${t.id}" data-pay="point" ${Math.max(0,H.points||0)<t.price*PT_RATE?'disabled':''}>⭐ ${(t.price*PT_RATE).toLocaleString()}</button><button class="btn sm cb" data-act="hBuy" data-id="${t.id}" data-pay="coin" ${H.coins<t.price?'disabled':''}>🪙 ${t.price}</button></div>`}</div>`}).join('')}</div>
-      <p class="tiny muted">🏆 하늘정원은 Elite, 우주 관측소는 Legend로 진화하면 무료로 열려요. 계절 테마는 그 계절에만 살 수 있어요.</p></section>
+    ${themeShop(T,S,H,cur,mons)}
     <section class="card ptbox"><div><b>⭐ Praise Points ${pts.toLocaleString()}</b><span class="tiny muted">선생님이 승인한 공부만큼 쌓여요. 방 테마를 사면 그만큼은 칭찬모아로 넘어가지 않아요.</span></div>
       <button class="ck ${S.point_save?'on':''}" data-act="ptSave" data-v="${S.point_save?0:1}">🐷 Save ${S.point_save?'ON':'OFF'}</button></section>
     ${H.visit?`<section class="card"><h3>Today's Stickers <small>${(H.today||[]).length}개</small></h3>${(H.today||[]).length?`<div class="chips">${H.today.map(t=>`<span class="pill">${STICKERS[t.kind][0]} ${esc(t.name)} · ${STICKERS[t.kind][1]}</span>`).join('')}</div>`:'<p class="tiny muted">아직 없어요. 친구 집에 놀러 가서 먼저 스티커를 남겨 보세요!</p>'}${stkLine(H.stickers)?`<p class="tiny muted" style="margin-top:8px">지금까지 받은 스티커 ${stkLine(H.stickers)}</p>`:''}</section>`:''}
@@ -1914,7 +1989,7 @@ const A={
   dSlot(d){UI.dSlot=d.v;render()},gSlotF(d){UI.gSlot=d.v||null;render()},gShop(d){UI.hv='shop';UI.sCat='gear';UI.gSlot=d.v;render()},
   async gWear(d){const m=myActive();if(!m)return;try{const P=await api.rpc('gear_equip',{monster:m.id,slot:d.slot,item:d.id||null});const before=(UI.home&&UI.home.power)||{};await refresh();await loadHouse();
     const up=P.total-(before.total||P.total);UI.dPop={up,t:Date.now()};beep(up>0?'win':'ok');toast(d.id?`입었어요! 전투력 ${P.total}${up>0?` (+${up})`:''}`:'벗었어요.');if(before.tier&&P.tier!==before.tier&&P.total>(before.total||0))setTimeout(()=>toast(`🎉 ${tierOf(P.total)[1]} 등급이 되었어요!`),900);render()}catch(e){toast(e.message,true)}},
-  async hTheme(d){try{await api.rpc('home_theme',{theme:d.id||null});await loadHouse();UI.hv='home';beep('ok');toast('방을 바꿨어요!');render()}catch(e){toast(e.message,true)}},
+  async hTheme(d){if(UI.hBusy)return;UI.hBusy=true;try{await api.rpc('home_theme',{theme:d.id||null});await loadHouse();UI.hv='home';beep('ok');toast('방을 바꿨어요!');render()}catch(e){toast(e.message,true)}finally{UI.hBusy=false}},
   hPick(d){const E=UI.hEdit;E.pick=E.pick===d.id?null:d.id;E.sel=null;render()},
   hCell(d){const E=UI.hEdit,x=+d.x,y=+d.y;
     if(E.pick){const it=itemOf(E.pick),left=((UI.home.inventory||{})[E.pick]||0)-E.layout.filter(e=>e.i===E.pick).length;if(left<=0){E.pick=null;return render()}
@@ -2008,6 +2083,7 @@ const A={
   newStudent(){modal(`<h2>학생 등록 <button class="btn sm g" data-act="close">닫기</button></h2><form class="stack" id="fNewStu"><label class="field">이름 (화면 표시용)<input id="nsName" maxlength="20" required></label><label class="field">아이디<input id="nsId" autocapitalize="none" pattern="[a-z0-9]{3,20}" placeholder="영문 소문자·숫자 3~20자" required></label>${DEMO?'':'<label class="field">초기 비밀번호<input id="nsPw" minlength="6" placeholder="6자 이상" required></label>'}<p class="tiny muted">이름과 아이디 외의 개인정보는 수집하지 않습니다. 실제 학생은 보호자 동의를 받은 뒤 등록해 주세요.</p><button class="btn p">등록</button></form>`)}
 };
 function keep(fn){const v={t:$('#aTitle')?.value,x:$('#aXp')?.value,d:$('#aDue')?.value};fn();if($('#aTitle')){$('#aTitle').value=v.t??'';if(v.x)$('#aXp').value=v.x;if(v.d)$('#aDue').value=v.d}}
+document.addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target&&e.target.matches&&e.target.matches('[role="button"][data-act]')){e.preventDefault();e.target.click()}});
 document.addEventListener('input',e=>{const t=e.target;if(t&&t.classList&&t.classList.contains('fitR')&&UI.fit){UI.fit.v={...(UI.fit.v||{dx:0,dy:0,s:1,r:0}),[t.dataset.k]:+t.value};const pv=document.querySelector('.fitpv'),sp=SPECIES_SEED.find(x=>x.id===UI.fit.sp),it=itemOf(UI.fit.id);if(pv&&sp){W.fits=W.fits||{};const k=UI.fit.sp+'|'+UI.fit.st+'|'+UI.fit.id,old=W.fits[k];W.fits[k]=UI.fit.v;pv.innerHTML=gearOn(monsterSVG(sp,UI.fit.st),{species_id:sp.id,stage:UI.fit.st,gear:{[it.slot]:UI.fit.id}});if(old)W.fits[k]=old;else delete W.fits[k]}const b=t.parentElement.querySelector('b');if(b)b.textContent=(+t.value).toFixed(2)}});
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el||el.disabled)return;const f=A[el.dataset.act];if(f)f(el.dataset,el,e)});
 document.addEventListener('change',e=>{const t=e.target;
